@@ -151,7 +151,7 @@ kubectl apply -f k8s/mlflow/
 kubectl wait --for=condition=Ready pod -l app=mlflow -n mlops --timeout=120s
 ```
 
-### 6. Data API del docente
+### 6. Data API
 
 ```bash
 kubectl apply -f k8s/data-api/
