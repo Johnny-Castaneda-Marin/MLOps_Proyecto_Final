@@ -1,0 +1,11 @@
+apache-airflow-providers-postgres
+scikit-learn
+xgboost
+lightgbm
+mlflow==2.13.0
+psycopg2-binary
+boto3
+pandas
+numpy
+scipy
+requests

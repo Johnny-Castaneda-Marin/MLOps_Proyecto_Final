@@ -1,0 +1,68 @@
+images:
+  airflow:
+    repository: mlops-airflow
+    tag: latest
+    pullPolicy: Never
+
+executor: LocalExecutor
+
+data:
+  metadataSecretName: ~
+  metadataConnection:
+    user: mlops_user
+    pass: mlops1234
+    host: postgres-service
+    port: 5432
+    db: airflow_db
+    sslmode: disable
+
+postgresql:
+  enabled: false
+
+env:
+  - name: AIRFLOW__CORE__LOAD_EXAMPLES
+    value: "false"
+  - name: DATA_API_URL
+    value: "http://data-api-service"
+  - name: POSTGRES_RAW_CONN
+    value: "postgresql://mlops_user:mlops1234@postgres-service:5432/raw_db"
+  - name: POSTGRES_CLEAN_CONN
+    value: "postgresql://mlops_user:mlops1234@postgres-service:5432/clean_db"
+  - name: MLFLOW_TRACKING_URI
+    value: "http://mlflow-service:5000"
+  - name: MLFLOW_S3_ENDPOINT_URL
+    value: "http://minio-service:9000"
+  - name: AWS_ACCESS_KEY_ID
+    value: "minioadmin"
+  - name: AWS_SECRET_ACCESS_KEY
+    value: "minioadmin123"
+
+dags:
+  gitSync:
+    enabled: false
+
+resources:
+  requests:
+    cpu: "500m"
+    memory: "1Gi"
+  limits:
+    cpu: "2000m"
+    memory: "3Gi"
+
+scheduler:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+
+webserver:
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"

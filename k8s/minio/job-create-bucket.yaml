@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-create-bucket
+  namespace: mlops
+spec:
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: minio/mc:latest
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "200m"
+              memory: "256Mi"
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mc alias set myminio http://minio-service:9000 minioadmin minioadmin123
+              mc mb myminio/mlflow --ignore-existing
+              echo "Bucket creado exitosamente"
