@@ -55,17 +55,14 @@ def train_and_promote(**context):
     for name, model in candidates.items():
         with mlflow.start_run(run_name=f"batch_{batch_number}_{name}") as run:
             model.fit(X_train, y_train)
-
             val_preds  = model.predict(X_val)
             test_preds = model.predict(X_test)
-
             val_mae  = mean_absolute_error(y_val, val_preds)
             val_rmse = np.sqrt(mean_squared_error(y_val, val_preds))
             val_r2   = r2_score(y_val, val_preds)
             test_mae = mean_absolute_error(y_test, test_preds)
             test_rmse= np.sqrt(mean_squared_error(y_test, test_preds))
             test_r2  = r2_score(y_test, test_preds)
-
             mlflow.log_params({"model": name, "batch_number": batch_number, "train_reason": train_reason})
             mlflow.log_metrics({
                 "val_mae": val_mae, "val_rmse": val_rmse, "val_r2": val_r2,
@@ -73,9 +70,7 @@ def train_and_promote(**context):
                 "train_size": len(X_train), "val_size": len(X_val)
             })
             mlflow.sklearn.log_model(model, "model", registered_model_name=MLFLOW_MODEL_NAME)
-
             logger.info(f"{name}: val_mae={val_mae:.2f}, val_rmse={val_rmse:.2f}, val_r2={val_r2:.4f}")
-
             if val_mae < best_val_mae:
                 best_val_mae = val_mae
                 best_run_id = run.info.run_id
@@ -83,7 +78,6 @@ def train_and_promote(**context):
 
     logger.info(f"Best candidate: {best_model_name} with val_mae={best_val_mae:.2f}")
 
-    # Compare with champion
     promoted = False
     promotion_reason = ""
     try:
@@ -91,7 +85,6 @@ def train_and_promote(**context):
         champ_run = client.get_run(champion.run_id)
         champ_mae = champ_run.data.metrics.get("val_mae", float("inf"))
         improvement = (champ_mae - best_val_mae) / champ_mae
-
         if improvement >= PROMOTION_MAE_IMPROVEMENT_PCT:
             promoted = True
             promotion_reason = f"MAE improved {improvement:.2%} over champion ({champ_mae:.2f} -> {best_val_mae:.2f})"
@@ -125,7 +118,7 @@ def skip_training(**context):
 def log_result(**context):
     ti = context['ti']
     engine = create_engine(POSTGRES_CLEAN_CONN.replace("/clean_db", "/mlops_db"))
-    with engine.connect() as conn:
+    with engine.begin() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS training_history (
                 id SERIAL PRIMARY KEY,
@@ -139,7 +132,6 @@ def log_result(**context):
                 logged_at TIMESTAMP DEFAULT NOW()
             )
         """))
-        conn.commit()
         conn.execute(text("""
             INSERT INTO training_history
             (batch_number, trained, train_reason, promoted, promotion_reason, best_model, best_val_mae)
@@ -153,5 +145,4 @@ def log_result(**context):
             "bm": ti.xcom_pull(key='best_model_name', task_ids='train_and_promote') or "",
             "mae": ti.xcom_pull(key='best_val_mae', task_ids='train_and_promote') or 0,
         })
-        conn.commit()
     engine.dispose()
