@@ -315,13 +315,63 @@ Locust ejecuta escenarios de carga contra `/predict` con payloads aleatorios rea
 - **`PredictUser`**: carga sostenida (espera 1–3 s entre peticiones).
 - **`AggressiveUser`**: carga pico (espera 0.1–0.5 s entre peticiones).
 
-El despliegue por defecto corre con 50 usuarios, spawn rate de 5/s, durante 5 minutos. El efecto de la carga se observa en el dashboard de Grafana.
+Locust se despliega en **modo web UI**: arranca de forma persistente exponiendo su interfaz en el puerto 8089, desde donde se define el número de usuarios y el spawn rate y se lanza la prueba contra `/predict`. El efecto de la carga se observa en el dashboard de Grafana.
+
+```bash
+# Acceder a la UI de Locust
+kubectl port-forward -n mlops-loadtest svc/locust-service 8089:8089
+# Abrir http://localhost:8089
+```
 
 <!-- Imagen: Estadísticas de Locust (RPS, latencias) -->
 <!-- ![Locust stats](images/locust_stats.png) -->
 
 <!-- Imagen: Latencia en Grafana durante la prueba de carga -->
 <!-- ![Grafana bajo carga](images/grafana_carga.png) -->
+
+### Solución de problemas: pod de Locust en `CrashLoopBackOff`
+
+**Síntoma:** el pod de Locust queda en `CrashLoopBackOff` / `Degraded`, con eventos repetidos de:
+
+- `Unhealthy`: `Readiness probe failed: Get "http://<pod-ip>:8089/": dial tcp ...:8089: connect: connection refused`
+- `BackOff`: `Back-off restarting failed container locust`
+
+**Causa:** el Deployment se había configurado con argumentos de modo batch (`--headless`, `--users`, `--spawn-rate`, `--run-time=5m`) que son incompatibles con un servicio web persistente con probes en el puerto 8089:
+
+1. `--headless` hace que Locust **no levante la interfaz web** en el puerto 8089, por lo que el readiness/liveness probe a `:8089/` recibe `connection refused`.
+2. `--run-time=5m` hace que el proceso **termine** tras 5 minutos; como es un `Deployment`, Kubernetes reinicia el contenedor y entra en `CrashLoopBackOff`.
+
+**Solución:** ejecutar Locust en modo web UI (sin `--headless` ni `--run-time`), dejando solo el `--host` de destino, de modo que el proceso permanezca vivo y los probes del puerto 8089 pasen. La carga se controla desde la UI.
+
+```yaml
+# k8s/locust/deployment.yaml (extracto)
+args:
+  - "--host=http://inference-api-service.mlops-api.svc.cluster.local:8000"
+# (se eliminaron --headless, --users, --spawn-rate y --run-time)
+readinessProbe:
+  httpGet:
+    path: /
+    port: 8089
+  initialDelaySeconds: 15
+  periodSeconds: 10
+livenessProbe:
+  httpGet:
+    path: /
+    port: 8089
+  initialDelaySeconds: 30
+  periodSeconds: 15
+```
+
+```bash
+# Aplicar el fix y reiniciar
+kubectl apply -f k8s/locust/deployment.yaml
+kubectl rollout restart deployment/locust -n mlops-loadtest
+```
+
+> Nota: si en lugar de la UI se quiere una prueba que se ejecute automáticamente y termine, el recurso correcto es un `Job` (no un `Deployment`) y deben eliminarse los probes, ya que el contenedor está diseñado para finalizar.
+
+<!-- Imagen: Pod de Locust en estado Running tras el fix -->
+<!-- ![Locust running](images/locust_running.png) -->
 
 ---
 
