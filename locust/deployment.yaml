@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust
+  namespace: mlops-loadtest
+  labels:
+    app: locust
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: locust
+  template:
+    metadata:
+      labels:
+        app: locust
+    spec:
+      containers:
+        - name: locust
+          image: johnnycastaneda10/mlops-puj-locust:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8089
+              protocol: TCP
+          env:
+            - name: LOCUST_HOST
+              value: "http://inference-api.mlops-api.svc.cluster.local:8000"
+          args:
+            - "--web-port=8089"
+            - "--host=http://inference-api.mlops-api.svc.cluster.local:8000"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu:
