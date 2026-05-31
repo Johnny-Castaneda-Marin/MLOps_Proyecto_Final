@@ -1,32 +1,30 @@
-build-streamlit:
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    if: needs.detect-changes.outputs.streamlit == 'true' || github.event_name == 'workflow_dispatch'
-    steps:
-      - uses: actions/checkout@v4
+# Dockerfile para la UI Streamlit (RF9, RF13, RF14)
+# Build context: raíz del repositorio (docker build -f streamlit/Dockerfile .)
+FROM python:3.10-slim
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+# Instalar dependencias del sistema necesarias para psycopg2 (training history)
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends gcc libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
 
-      - name: Log in to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+WORKDIR /app
 
-      - name: Extract short SHA
-        id: sha
-        run: echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+# Copiar e instalar dependencias de Python
+COPY streamlit/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
 
-      - name: Build and push Streamlit image
-        uses: docker/build-push-action@v6
-        with:
-          # Context es la raíz del repo porque el Dockerfile copia streamlit/ desde allí
-          context: .
-          file: streamlit/Dockerfile
-          push: true
-          tags: |
-            ${{ env.IMAGE_PREFIX }}-streamlit:${{ steps.sha.outputs.short_sha }}
-            ${{ env.IMAGE_PREFIX }}-streamlit:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+# Copiar el código de la aplicación Streamlit
+COPY streamlit/ ./streamlit/
+
+# Variable de entorno para que Python encuentre los módulos
+ENV PYTHONPATH=/app
+
+# Puerto por defecto de Streamlit
+EXPOSE 8501
+
+# Health check integrado en el contenedor
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8501/_stcore/health')" || exit 1
+
+# Ejecutar Streamlit sin abrir navegador y escuchando en todas las interfaces
+CMD ["streamlit", "run", "streamlit/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
