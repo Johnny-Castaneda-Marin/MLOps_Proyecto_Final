@@ -96,7 +96,7 @@ jobs:
       - name: Build and push Streamlit image
         uses: docker/build-push-action@v6
         with:
-          context: streamlit
+          context: .
           file: streamlit/Dockerfile
           push: true
           tags: |
