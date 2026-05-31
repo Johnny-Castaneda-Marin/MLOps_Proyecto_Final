@@ -1,334 +1,484 @@
-# 🏠 MLOps Proyecto Final — Real Estate Price Prediction
+# Plataforma MLOps — Predicción de Precios de Inmuebles
 
-## 📑 Tabla de contenido
+Plataforma MLOps de extremo a extremo para la predicción de precios de bienes raíces, desplegada sobre Kubernetes con despliegue declarativo (GitOps) vía Argo CD. El sistema cubre el ciclo completo: ingesta incremental de datos, validación, decisión automática de entrenamiento, registro de experimentos en MLflow, promoción de modelos por desempeño, servicio de inferencia con recarga en caliente, interfaz de usuario, observabilidad y pruebas de carga.
 
-1. [Descripción general](#descripción-general)
-2. [Arquitectura](#arquitectura)
-3. [Requisitos previos](#requisitos-previos)
-4. [Estructura del proyecto](#estructura-del-proyecto)
-5. [Levantar la infraestructura](#levantar-la-infraestructura)
-6. [Servicios desplegados](#servicios-desplegados)
-7. [Pipeline de Airflow (DAGs)](#pipeline-de-airflow-dags)
-8. [Colaboradores](#colaboradores)
+## Tabla de Contenidos
 
----
-
-## Descripción general
-
-Sistema completo de MLOps sobre Kubernetes que cubre el ciclo de vida de un modelo de Machine Learning para predecir precios de propiedades inmobiliarias. El sistema consume datos de forma incremental desde una API externa, los valida, decide automáticamente si reentrenar, registra experimentos en MLflow, compara el modelo candidato contra el productivo y lo promueve si mejora el desempeño.
-
-**Dataset**: Propiedades inmobiliarias con variables como `price`, `bed`, `bath`, `house_size`, `city`, `state`, entre otras.
-
-**Problema**: Regresión — predicción del precio de una propiedad.
-
-**Métrica principal**: MAE (Mean Absolute Error). Se promueve un modelo si reduce el MAE al menos 3% frente al campeón actual.
+1. [Arquitectura](#1-arquitectura)
+2. [Estructura del Proyecto](#2-estructura-del-proyecto)
+3. [Componentes y Namespaces](#3-componentes-y-namespaces)
+4. [Capa de Lógica Pura `mlops_core`](#4-capa-de-lógica-pura-mlops_core)
+5. [Pipeline de Airflow](#5-pipeline-de-airflow)
+6. [Bases de Datos y Backends](#6-bases-de-datos-y-backends)
+7. [API de Inferencia (FastAPI)](#7-api-de-inferencia-fastapi)
+8. [Interfaz Streamlit](#8-interfaz-streamlit)
+9. [Observabilidad: Prometheus + Grafana](#9-observabilidad-prometheus--grafana)
+10. [Pruebas de Carga con Locust](#10-pruebas-de-carga-con-locust)
+11. [CI/CD y GitOps](#11-cicd-y-gitops)
+12. [Pruebas Basadas en Propiedades](#12-pruebas-basadas-en-propiedades)
+13. [Despliegue](#13-despliegue)
+14. [Evidencias](#14-evidencias)
+15. [Colaboradores](#15-colaboradores)
 
 ---
 
-## Arquitectura
+## 1. Arquitectura
 
-```
-Developer → GitHub → GitHub Actions → Docker Hub → Argo CD → Kubernetes
+El sistema se despliega en Kubernetes y se sincroniza de forma declarativa con Argo CD. Las imágenes se construyen y publican en DockerHub mediante GitHub Actions. Cada componente vive en su propio namespace para aislamiento.
+
+```mermaid
+flowchart LR
+    Dev[Developer] --> GH[GitHub Repo]
+    GH --> GHA[GitHub Actions]
+    GHA --> DH[DockerHub]
+    GH --> ACD[Argo CD]
+    ACD --> K8S[(Kubernetes)]
+    DH --> K8S
+
+    subgraph K8S[Kubernetes]
+        DAPI[data-api]
+        AF[Airflow]
+        PG[(PostgreSQL)]
+        MF[MLflow]
+        MINIO[(MinIO S3)]
+        API[FastAPI inference]
+        ST[Streamlit UI]
+        LOC[Locust]
+        PROM[Prometheus]
+        GRAF[Grafana]
+    end
+
+    DAPI --> AF
+    AF --> PG
+    AF --> MF
+    MF --> PG
+    MF --> MINIO
+    API --> MF
+    API --> PG
+    ST --> API
+    LOC --> API
+    PROM --> API
+    GRAF --> PROM
 ```
 
-Dentro del clúster:
+La decisión de diseño central es la extracción de toda la lógica de negocio a una capa pura y testeable (`mlops_core`), de modo que las tareas de Airflow y la API se convierten en **adaptadores delgados** que solo manejan I/O y delegan las reglas de decisión.
 
-```
-Data API → Airflow DAG → PostgreSQL (raw_db / clean_db)
-                       → MLflow (experimentos + model registry)
-                       → FastAPI (inferencia)
-                       → Streamlit (UI)
-                       → Locust (pruebas de carga)
-                       → Prometheus + Grafana (observabilidad)
-```
+<!-- Imagen: Diagrama de arquitectura / vista general del despliegue -->
+<!-- ![Arquitectura](images/arquitectura.png) -->
 
 ---
 
-## Requisitos previos
-
-- Docker Desktop con WSL2
-- kind (`kind create cluster`)
-- kubectl
-- helm
-- Git
-
-Versiones usadas:
-
-| Herramienta | Versión |
-|-------------|---------|
-| Docker | 29.2.1 |
-| kubectl | v1.30 |
-| helm | v3.20.2 |
-| kind | v1.30.13 |
-| Python | 3.12 |
-
----
-
-## Estructura del proyecto
+## 2. Estructura del Proyecto
 
 ```
-MLOps_ProyectoFinal/
-├── airflow/
+Proyecto3/
+├── airflow/                          # Orquestación del pipeline
 │   ├── dags/
-│   │   ├── mlops_pipeline.py       # DAG principal
-│   │   └── tasks/
-│   │       ├── config.py           # Variables de configuración
-│   │       ├── fetch_batch.py      # Consume la API de datos
-│   │       ├── store_raw.py        # Almacena datos crudos en raw_db
-│   │       ├── validate.py         # Validaciones + detección de drift + decisión
-│   │       ├── preprocess.py       # Limpieza y almacenamiento en clean_db
-│   │       └── train.py            # Entrenamiento, registro en MLflow y promoción
+│   │   ├── mlops_pipeline.py         # DAG principal
+│   │   └── tasks/                    # Adaptadores delgados (I/O)
+│   │       ├── fetch_batch.py
+│   │       ├── store_raw.py
+│   │       ├── validate.py
+│   │       ├── preprocess.py
+│   │       └── train.py
 │   ├── Dockerfile
 │   └── requirements.txt
-├── api/                            # FastAPI — inferencia (pendiente)
-├── streamlit/                      # UI Streamlit (pendiente)
-├── locust/                         # Pruebas de carga (pendiente)
-├── mlflow/
-│   └── Dockerfile                  # MLflow con psycopg2 + boto3
-├── k8s/
-│   ├── namespace/
-│   ├── postgres/
-│   ├── minio/
-│   ├── mlflow/
-│   ├── airflow/
-│   ├── data-api/
-│   ├── api/
-│   ├── streamlit/
-│   ├── locust/
-│   ├── prometheus/
-│   ├── grafana/
-│   └── argocd/
-└── .github/
-    └── workflows/                  # GitHub Actions (pendiente)
+├── mlops_core/                       # Lógica pura testeable (sin I/O)
+│   ├── ingest.py                     # Selección de día, deduplicación, hash
+│   ├── validation.py                 # Esquema, calidad, drift, nuevas categorías
+│   ├── decision.py                   # Regla de decisión de entrenamiento
+│   ├── promotion.py                  # Regla de promoción (MAE + guarda RMSE)
+│   ├── features.py                   # Codificación + particionado determinista
+│   ├── logging_schema.py             # Payloads de auditoría / experimento / inferencia
+│   └── types.py                      # Dataclasses compartidas
+├── api/                              # API de inferencia (FastAPI)
+│   ├── main.py                       # Endpoints
+│   ├── config.py                     # Configuración por variables de entorno
+│   ├── model_holder.py               # Holder thread-safe + recarga en caliente
+│   ├── inference_log.py              # Registro de inferencias en raw_db
+│   └── Dockerfile
+├── streamlit/                        # UI de inferencia + historial
+│   ├── app.py
+│   └── Dockerfile
+├── locust/                           # Pruebas de carga
+│   ├── locustfile.py
+│   └── Dockerfile
+├── prometheus/                       # Configuración de scrape
+│   └── prometheus.yml
+├── grafana/                          # Dashboards y provisioning
+│   ├── dashboards/
+│   └── provisioning/
+├── mlflow/                           # Imagen de MLflow
+│   └── Dockerfile
+├── k8s/                              # Manifiestos de Kubernetes (GitOps)
+│   ├── namespace/                    # Definición de namespaces
+│   ├── postgres/  minio/  mlflow/    # Infraestructura
+│   ├── data-api/  api/  streamlit/   # Aplicaciones
+│   ├── locust/  prometheus/  grafana/# Carga y observabilidad
+│   └── argocd/                       # Application de Argo CD
+├── tests/                            # PBT + unitarias + integración
+├── .github/workflows/                # CI/CD (build/tag/push a DockerHub)
+└── README.md
 ```
+
+La infraestructura (`k8s/`) está separada del código de cada componente, y la lógica de negocio (`mlops_core/`) está separada de los adaptadores de I/O (`airflow/dags/tasks/`, `api/`).
 
 ---
 
-## Levantar la infraestructura
+## 3. Componentes y Namespaces
 
-### 1. Crear el clúster
+Cada aplicación se despliega en un namespace dedicado para aislamiento. La comunicación entre componentes usa FQDNs de Kubernetes (`service.namespace.svc.cluster.local`).
 
-```bash
-kind create cluster --name kind
-kubectl get nodes
+| Componente | Namespace | Puerto | Propósito |
+|---|---|---|---|
+| PostgreSQL | `mlops-data` | 5432 | Bases `raw_db`, `clean_db`, `mlops_db`, `mlflow_db`, `airflow_db` |
+| MinIO | `mlops-storage` | 9000 / 9001 | Almacén de artefactos S3 (`s3://mlflow`) |
+| MLflow | `mlops-mlflow` | 5000 | Tracking + Model Registry |
+| Data API | `mlops-data-api` | 80 | Fuente externa de lotes diarios |
+| Inference API | `mlops-api` | 8000 | Servicio de predicción + recarga en caliente |
+| Streamlit | `mlops-ui` | 8501 | Interfaz de inferencia e historial |
+| Locust | `mlops-loadtest` | 8089 | Pruebas de carga |
+| Prometheus | `mlops-monitoring` | 9090 | Recolección de métricas |
+| Grafana | `mlops-monitoring` | 3000 | Dashboards de carga/latencia |
+| Argo CD | `argocd` | — | Sincronización declarativa (GitOps) |
+
+<!-- Imagen: kubectl get pods -A mostrando los pods por namespace -->
+<!-- ![Pods por namespace](images/pods_namespaces.png) -->
+
+---
+
+## 4. Capa de Lógica Pura `mlops_core`
+
+Toda la lógica de negocio vive en `mlops_core`, sin dependencias de infraestructura (PostgreSQL, MLflow, HTTP). Esto la hace determinista y testeable con pruebas basadas en propiedades.
+
+| Módulo | Responsabilidad |
+|---|---|
+| `ingest` | `select_day()`, `is_exhausted()`, `row_hash()` (MD5 estable), `deduplicate()` |
+| `validation` | Validación de esquema (incluye tipos), calidad, drift numérico y nuevas categorías |
+| `decision` | `decide_training()` — regla técnica sin periodicidad ni conteo bruto de lotes |
+| `promotion` | `should_promote()` — MAE con guarda de RMSE |
+| `features` | Codificación de categóricas con manejo de desconocidos, particionado determinista |
+| `logging_schema` | Construcción y serialización de eventos de auditoría, experimento e inferencia |
+
+Las tareas de Airflow y la API importan estas funciones y solo se encargan de leer/escribir datos.
+
+---
+
+## 5. Pipeline de Airflow
+
+El DAG `mlops_pipeline` orquesta el flujo completo desde la ingesta hasta la promoción.
+
+```mermaid
+flowchart TD
+    start([start]) --> fetch[fetch_batch]
+    fetch --> store[store_raw]
+    store --> vs[validate_schema]
+    vs --> vq[validate_quality]
+    vq --> dd[detect_drift]
+    dd --> decide{decide_training}
+    decide -->|TRAIN| pre[preprocess_data]
+    pre --> train[train_candidates]
+    train --> compare[compare_models]
+    compare --> promote[promote_or_reject]
+    promote --> log[log_result]
+    decide -->|SKIP| skip[skip_training]
+    skip --> log
+    log --> done([end])
 ```
 
-### 2. Crear el namespace
+### Tareas principales
 
-```bash
-kubectl apply -f k8s/namespace/namespace.yaml
+- **`fetch_batch`**: ingesta incremental. Lee el conteo de `batch_control`, delega la selección de día y la detección de agotamiento a `mlops_core.ingest`, llama a la Data API con `timeout=120` y persiste metadatos.
+- **`store_raw`**: persistencia cruda con deduplicación por `row_hash`, conservando los campos originales sin modificación.
+- **`validate_schema` / `validate_quality` / `detect_drift`**: validaciones delegadas a `mlops_core.validation`.
+- **`decide_training`** (`BranchPythonOperator`): decide TRAIN o SKIP según reglas técnicas (drift, volumen nuevo, categorías nuevas), nunca por periodicidad.
+- **`train_candidates`**: entrena Ridge, RandomForest y GradientBoosting (`random_state=42`), registra en MLflow parámetros, métricas, commit de código y artefactos.
+- **`compare_models` / `promote_or_reject`**: compara el candidato contra el `champion` y reasigna el alias solo si mejora el MAE sin empeorar el RMSE.
+- **`log_result`**: registra la decisión, motivos e IDs de MLflow en `training_history`.
+
+<!-- Imagen: Graph View del DAG mlops_pipeline en Airflow -->
+<!-- ![DAG Graph View](images/dag_graph.png) -->
+
+<!-- Imagen: Ejecución exitosa del DAG (todos los tasks en verde) -->
+<!-- ![DAG exitoso](images/dag_exitoso.png) -->
+
+---
+
+## 6. Bases de Datos y Backends
+
+El sistema usa PostgreSQL con bases dedicadas por dominio, creadas automáticamente en el primer arranque mediante un script de inicialización.
+
+| Base | Contenido |
+|---|---|
+| `raw_db` | `batch_control`, `raw_properties`, `inference_log` |
+| `clean_db` | `clean_properties` (datos procesados con `split`) |
+| `mlops_db` | `training_history` (auditoría de entrenamiento/promoción) |
+| `mlflow_db` | Backend de metadatos de MLflow |
+| `airflow_db` | Metadatos internos de Airflow |
+
+### Backends de MLflow
+
+- **Metadatos**: PostgreSQL `mlflow_db` (no SQLite).
+- **Artefactos**: bucket `s3://mlflow` en MinIO.
+- **Modelo registrado**: `real_estate_champion`, con alias de producción `champion`.
+
+<!-- Imagen: Bases de datos creadas en PostgreSQL -->
+<!-- ![Bases de datos](images/databases.png) -->
+
+<!-- Imagen: MLflow UI con experimentos y modelo registrado -->
+<!-- ![MLflow](images/mlflow_ui.png) -->
+
+---
+
+## 7. API de Inferencia (FastAPI)
+
+La API sirve el modelo `champion` con recarga en caliente, usando MLflow como única fuente de verdad (sin rutas locales ni versiones fijas en el código).
+
+### Endpoints
+
+| Método | Ruta | Descripción | Auth |
+|---|---|---|---|
+| `POST` | `/predict` | Recibe features de propiedad, devuelve predicción + versión del modelo | No |
+| `POST` | `/admin/reload` | Fuerza recarga del modelo `champion` desde MLflow | Sí (token Bearer) |
+| `GET` | `/health` | Liveness/readiness check | No |
+| `GET` | `/metrics` | Métricas en formato Prometheus | No |
+
+### Recarga en caliente
+
+El `ModelHolder` mantiene el modelo y su versión en memoria, protegido con lock. Un poller periódico consulta el alias `champion` en MLflow y, si cambió, dispara una recarga atómica. Si la carga falla, se conserva el modelo previo. El endpoint `/admin/reload` permite recarga bajo demanda protegida por token.
+
+### Contrato `/predict`
+
+```json
+// request
+{ "brokered_by": 101.0, "status": "for_sale", "bed": 3, "bath": 2,
+  "acre_lot": 0.12, "street": 123.0, "city": "Austin", "state": "Texas",
+  "zip_code": 78701.0, "house_size": 1800.0, "prev_sold_year": 2018 }
+
+// response
+{ "prediction": 412500.0, "model_version": "7", "status": "ok" }
 ```
 
-### 3. PostgreSQL
+Cada solicitud (exitosa o fallida) se registra en la tabla `inference_log` de `raw_db`.
+
+<!-- Imagen: Swagger UI de la API en /docs -->
+<!-- ![Swagger UI](images/api_docs.png) -->
+
+<!-- Imagen: Respuesta exitosa de POST /predict -->
+<!-- ![Predicción](images/api_predict.png) -->
+
+<!-- Imagen: Respuesta de GET /health y GET /metrics -->
+<!-- ![Health y metrics](images/api_health_metrics.png) -->
+
+---
+
+## 8. Interfaz Streamlit
+
+La UI tiene dos secciones:
+
+- **Inferencia**: formulario con las características de la propiedad que envía un `POST /predict` y muestra la predicción y la versión del modelo.
+- **Historial de Entrenamiento y Despliegue**: lee `training_history` y muestra por lote la decisión de entrenamiento, el motivo, si fue promovido o rechazado, el cambio de desempeño y los identificadores de MLflow.
+
+<!-- Imagen: Sección de inferencia de Streamlit con una predicción -->
+<!-- ![Streamlit Inferencia](images/streamlit_inferencia.png) -->
+
+<!-- Imagen: Sección de historial de entrenamiento -->
+<!-- ![Streamlit Historial](images/streamlit_historial.png) -->
+
+---
+
+## 9. Observabilidad: Prometheus + Grafana
+
+La API expone métricas en `/metrics` con `prometheus_client`:
+
+| Métrica | Tipo | Descripción |
+|---|---|---|
+| `inference_requests_total` | Counter | Total de solicitudes de inferencia |
+| `inference_latency_seconds` | Histogram | Latencia de las solicitudes |
+| `inference_errors_total` | Counter | Total de errores de inferencia |
+| `model_info{version, model_name}` | Gauge | Versión del modelo en servicio |
+
+Prometheus hace scrape de la API y Grafana presenta un dashboard con throughput, latencia p50/p95/p99, tasa de error y versión del modelo.
+
+<!-- Imagen: Target de la API UP en Prometheus -->
+<!-- ![Prometheus targets](images/prometheus_targets.png) -->
+
+<!-- Imagen: Dashboard de Grafana con throughput y latencias -->
+<!-- ![Grafana dashboard](images/grafana_dashboard.png) -->
+
+---
+
+## 10. Pruebas de Carga con Locust
+
+Locust ejecuta escenarios de carga contra `/predict` con payloads aleatorios realistas. Define dos perfiles de usuario:
+
+- **`PredictUser`**: carga sostenida (espera 1–3 s entre peticiones).
+- **`AggressiveUser`**: carga pico (espera 0.1–0.5 s entre peticiones).
+
+El despliegue por defecto corre con 50 usuarios, spawn rate de 5/s, durante 5 minutos. El efecto de la carga se observa en el dashboard de Grafana.
+
+<!-- Imagen: Estadísticas de Locust (RPS, latencias) -->
+<!-- ![Locust stats](images/locust_stats.png) -->
+
+<!-- Imagen: Latencia en Grafana durante la prueba de carga -->
+<!-- ![Grafana bajo carga](images/grafana_carga.png) -->
+
+---
+
+## 11. CI/CD y GitOps
+
+### GitHub Actions
+
+El workflow `.github/workflows/docker-build-push.yml` construye, etiqueta y publica las imágenes de cada componente (api, streamlit, airflow, locust) en DockerHub. Cada imagen se etiqueta con el **SHA corto del commit** y con `latest`. Usa detección de cambios para construir solo los componentes modificados.
+
+Requiere configurar dos secrets en el repositorio (Settings → Secrets and variables → Actions):
+
+| Secret | Valor |
+|---|---|
+| `DOCKERHUB_USERNAME` | usuario de DockerHub |
+| `DOCKERHUB_TOKEN` | access token de DockerHub (Read & Write) |
+
+### Argo CD
+
+La `Application` en `k8s/argocd/application.yaml` sincroniza recursivamente todos los manifiestos de `k8s/` hacia el clúster, con `prune` y `selfHeal` habilitados, y crea los namespaces automáticamente.
+
+<!-- Imagen: Workflow de GitHub Actions en verde -->
+<!-- ![GitHub Actions](images/github_actions.png) -->
+
+<!-- Imagen: Application de Argo CD sincronizada (Synced / Healthy) -->
+<!-- ![Argo CD](images/argocd_synced.png) -->
+
+---
+
+## 12. Pruebas Basadas en Propiedades
+
+La capa `mlops_core` y el `ModelHolder` de la API se validan con 17 propiedades de correctitud, cada una implementada como un test basado en propiedades con `Hypothesis` (mínimo 100 iteraciones). Las verificaciones de infraestructura se cubren con pruebas unitarias y de integración.
+
+| # | Propiedad | Valida |
+|---|---|---|
+| 1 | Selección de día por índice acumulado | RF1.1 |
+| 2 | Condición de agotamiento | RF1.6 |
+| 3 | Deduplicación, idempotencia y estabilidad del hash | RF1.4 |
+| 4 | Preservación de datos crudos | RF2.1 |
+| 5 | Preservación de trazabilidad por lote | RF2.5, RF11.1 |
+| 6 | Validación de esquema detecta toda discrepancia | RF3.1 |
+| 7 | Validación de calidad y aptitud del lote | RF3.2, RF3.8 |
+| 8 | Detección de drift numérico por umbral | RF3.3 |
+| 9 | Detección de nuevas categorías | RF3.4 |
+| 10 | Manejo robusto de categorías desconocidas | RF3.5 |
+| 11 | Decisión de entrenamiento por reglas técnicas | RF3.6, RF3.7, RF4.2, RF4.4 |
+| 12 | Independencia de periodicidad y conteo de lotes | RF4.3 |
+| 13 | Regla de promoción (MAE con guarda de RMSE) | RF6.1–6.5 |
+| 14 | Round-trip del registro de auditoría | RF4.6, RF6.7 |
+| 15 | Consistencia del modelo servido bajo recarga y fallo | RF7.5, RF7.6, RF7.7 |
+| 16 | Cobertura y round-trip del evento de inferencia | RF8.2, RF8.3 |
+| 17 | Particionado determinista (reproducibilidad) | RF11.3 |
+
+### Ejecutar las pruebas
 
 ```bash
-kubectl apply -f k8s/postgres/
-kubectl wait --for=condition=Ready pod/postgres-0 -n mlops --timeout=120s
+# Crear entorno e instalar dependencias
+python -m venv .venv
+.venv\Scripts\activate          # Windows
+pip install -r requirements-dev.txt
 
-# Crear bases de datos (se crean automáticamente via init script, pero se pueden crear manualmente si es necesario)
-kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE raw_db;"
-kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE clean_db;"
-kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE mlflow_db;"
-kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE airflow_db;"
+# Ejecutar toda la suite
+pytest tests/ -v
 ```
 
-### 4. MinIO
+<!-- Imagen: Salida de pytest con todas las pruebas en verde -->
+<!-- ![Pytest](images/pytest_passed.png) -->
+
+---
+
+## 13. Despliegue
+
+### Prerrequisitos
+
+- Un clúster de Kubernetes (microk8s, kind, minikube o gestionado)
+- Argo CD instalado en el clúster
+- DockerHub con las imágenes publicadas (vía GitHub Actions)
+
+### Despliegue con Argo CD (recomendado)
 
 ```bash
-kubectl apply -f k8s/minio/
-kubectl wait --for=condition=Ready pod/minio-0 -n mlops --timeout=120s
-kubectl apply -f k8s/minio/job-create-bucket.yaml
-kubectl logs job/minio-create-bucket -n mlops --follow
-```
-
-### 5. MLflow
-
-La imagen de MLflow necesita `psycopg2` y `boto3`. Constrúyela y cárgala en kind:
-
-```bash
-docker build -t mlops-mlflow:latest mlflow/
-kind load docker-image mlops-mlflow:latest --name kind
-kubectl apply -f k8s/mlflow/
-kubectl wait --for=condition=Ready pod -l app=mlflow -n mlops --timeout=120s
-```
-
-### 6. Data API
-
-```bash
-kubectl apply -f k8s/data-api/
-kubectl wait --for=condition=Ready pod -l app=data-api -n mlops --timeout=120s
-```
-
-Verificar que la API responde:
-
-```bash
-kubectl port-forward svc/data-api-service 8000:80 -n mlops &
-curl "http://localhost:8000/health"
-```
-
-### 7. Airflow
-
-La imagen de Airflow incluye las dependencias de ML (scikit-learn, xgboost, lightgbm, mlflow, etc.):
-
-```bash
-docker build -t mlops-airflow:latest airflow/
-kind load docker-image mlops-airflow:latest --name kind
-
-helm repo add apache-airflow https://airflow.apache.org
-helm repo update
-
-helm install airflow apache-airflow/airflow \
-  --namespace mlops \
-  --values k8s/airflow/values.yaml \
-  --version 1.15.0 \
-  --timeout 10m
-```
-
-Copiar los DAGs al scheduler y webserver:
-
-```bash
-SCHEDULER=$(kubectl get pods -n mlops -l component=scheduler -o jsonpath='{.items[0].metadata.name}')
-WEBSERVER=$(kubectl get pods -n mlops -l component=webserver -o jsonpath='{.items[0].metadata.name}')
-
-kubectl exec -n mlops $SCHEDULER -c scheduler -- mkdir -p /opt/airflow/dags/tasks
-kubectl exec -n mlops $WEBSERVER -- mkdir -p /opt/airflow/dags/tasks
-
-for f in mlops_pipeline.py; do
-  kubectl cp airflow/dags/$f mlops/$SCHEDULER:/opt/airflow/dags/$f -c scheduler
-  kubectl cp airflow/dags/$f mlops/$WEBSERVER:/opt/airflow/dags/$f
-done
-
-for f in config.py fetch_batch.py store_raw.py validate.py preprocess.py train.py; do
-  kubectl cp airflow/dags/tasks/$f mlops/$SCHEDULER:/opt/airflow/dags/tasks/$f -c scheduler
-  kubectl cp airflow/dags/tasks/$f mlops/$WEBSERVER:/opt/airflow/dags/tasks/$f
-done
-
-# Forzar reserialización en el webserver
-kubectl exec -n mlops $WEBSERVER -- airflow dags reserialize
-```
-
-Acceder a la UI:
-
-```bash
-kubectl port-forward svc/airflow-webserver 8080:8080 -n mlops
-```
-
-- URL: `http://localhost:8080`
-- Usuario: `admin`
-- Password: `admin`
-
-### 8. Argo CD
-
-```bash
+# Aplicar la Application de Argo CD
 kubectl apply -f k8s/argocd/application.yaml
-kubectl port-forward svc/argocd-server -n argocd 8443:443
+
+# Argo CD sincroniza el resto de manifiestos automáticamente
 ```
 
-Obtener contraseña:
+### Despliegue manual (alternativo)
 
 ```bash
-kubectl get secret argocd-initial-admin-secret -n argocd \
-  -o jsonpath="{.data.password}" | base64 -d && echo
+# Crear los namespaces
+kubectl apply -f k8s/namespace/namespaces.yaml
+
+# Aplicar la infraestructura y las aplicaciones
+kubectl apply -f k8s/postgres/
+kubectl apply -f k8s/minio/
+kubectl apply -f k8s/mlflow/
+kubectl apply -f k8s/data-api/
+kubectl apply -f k8s/api/
+kubectl apply -f k8s/streamlit/
+kubectl apply -f k8s/prometheus/
+kubectl apply -f k8s/grafana/
+kubectl apply -f k8s/locust/
 ```
 
-- URL: `https://localhost:8443`
-- Usuario: `admin`
+<!-- Imagen: Recursos desplegados y en estado Running -->
+<!-- ![Despliegue](images/deploy_running.png) -->
 
 ---
 
-## Servicios desplegados
+## 14. Evidencias
 
-| Servicio | Propósito | Puerto |
-|----------|-----------|--------|
-| `postgres-service` | Bases raw_db, clean_db, airflow_db | `5432` |
-| `minio-service` | Artifact store para MLflow | `9000/9001` |
-| `mlflow-service` | Tracking server y model registry | `5000` |
-| `data-api-service` | API externa de datos del docente | `80` |
-| `airflow-webserver` | UI de Airflow | `8080` |
-| `api` | FastAPI inferencia (pendiente) | `8000` |
-| `streamlit` | Interfaz gráfica (pendiente) | `8501` |
-| `locust` | Pruebas de carga (pendiente) | `8089` |
-| `prometheus` | Métricas (pendiente) | `9090` |
-| `grafana` | Dashboards (pendiente) | `3000` |
+Esta sección reúne las capturas de las pruebas realizadas sobre la plataforma. Coloca las imágenes en una carpeta `images/` y reemplaza los marcadores.
 
----
+### 14.1 Pipeline de Airflow
 
-## Pipeline de Airflow (DAGs)
+<!-- ![DAG ejecutado exitosamente](images/evidencia_dag.png) -->
 
-### DAG: `mlops_pipeline`
+### 14.2 Entrenamiento y registro en MLflow
 
-Schedule: `@daily` (ejecutar manualmente por ahora)
+<!-- ![Experimentos y modelo champion en MLflow](images/evidencia_mlflow.png) -->
 
-#### Flujo de tareas
+### 14.3 API de inferencia
 
-```
-start
-  └── fetch_batch          # Consume un lote de la API externa
-        └── store_raw      # Guarda datos crudos en raw_db (bulk insert)
-              └── validate_schema    # Verifica columnas y tipos
-                    └── validate_quality   # Nulos, duplicados, precios inválidos
-                          └── detect_drift       # Compara distribuciones con histórico
-                                └── decide_training    # Bifurcación: entrenar o no
-                                      ├── preprocess_data → train_and_promote → log_result → end
-                                      └── skip_training → log_result → end
-```
+<!-- ![Predicción vía API](images/evidencia_api_predict.png) -->
+<!-- ![Recarga de modelo /admin/reload](images/evidencia_api_reload.png) -->
 
-#### Criterios de decisión de entrenamiento
+### 14.4 Interfaz Streamlit
 
-El DAG entrena si se cumple al menos uno de estos criterios:
+<!-- ![Inferencia desde Streamlit](images/evidencia_streamlit_pred.png) -->
+<!-- ![Historial de entrenamiento](images/evidencia_streamlit_historial.png) -->
 
-- Se detectó drift en variables numéricas (cambio > 10% en media)
-- El lote nuevo tiene más de 1,000 registros nuevos
-- El lote aumenta el volumen histórico en más del 5%
+### 14.5 Observabilidad
 
-No entrena si:
-- Total acumulado < 1,000 registros
-- El lote tiene problemas graves de calidad
+<!-- ![Prometheus scrapeando la API](images/evidencia_prometheus.png) -->
+<!-- ![Dashboard de Grafana](images/evidencia_grafana.png) -->
 
-#### Modelos entrenados
+### 14.6 Pruebas de carga
 
-| Modelo | Hiperparámetros |
-|--------|----------------|
-| Ridge | `alpha=1.0` |
-| Random Forest | `n_estimators=100`, `max_depth=10` |
-| Gradient Boosting | `n_estimators=100`, `max_depth=5` |
+<!-- ![Resultados de Locust](images/evidencia_locust.png) -->
 
-#### Criterio de promoción
+### 14.7 CI/CD y GitOps
 
-Se promueve el candidato si su `val_mae` mejora al menos **3%** frente al campeón actual en MLflow. El modelo productivo se identifica con el alias `champion`.
+<!-- ![Pipeline de GitHub Actions](images/evidencia_ci.png) -->
+<!-- ![Argo CD sincronizado](images/evidencia_argocd.png) -->
 
-#### Ejecutar el pipeline manualmente
+### 14.8 Pruebas automatizadas
 
-```bash
-SCHEDULER=$(kubectl get pods -n mlops -l component=scheduler -o jsonpath='{.items[0].metadata.name}')
-kubectl exec -n mlops $SCHEDULER -c scheduler -- airflow dags trigger mlops_pipeline
-```
-
-#### Reiniciar la API de datos (volver al lote 1)
-
-```bash
-kubectl port-forward svc/data-api-service 8000:80 -n mlops &
-curl "http://localhost:8000/restart_data_generation?group_number=1"
-```
+<!-- ![Suite de pruebas en verde](images/evidencia_pytest.png) -->
 
 ---
 
-## Variables de entorno (Airflow)
-
-| Variable | Valor |
-|----------|-------|
-| `DATA_API_URL` | `http://data-api-service` |
-| `POSTGRES_RAW_CONN` | `postgresql://mlops_user:mlops1234@postgres-service:5432/raw_db` |
-| `POSTGRES_CLEAN_CONN` | `postgresql://mlops_user:mlops1234@postgres-service:5432/clean_db` |
-| `MLFLOW_TRACKING_URI` | `http://mlflow-service:5000` |
-| `MLFLOW_S3_ENDPOINT_URL` | `http://minio-service:9000` |
-| `AWS_ACCESS_KEY_ID` | `minioadmin` |
-| `AWS_SECRET_ACCESS_KEY` | `minioadmin123` |
-
----
-
-## 👥 Colaboradores
+## 15. Colaboradores
 
 - 🧑‍💻 **Camilo Cortés** — [![GitHub](https://img.shields.io/badge/GitHub-@cccortesh95-181717?logo=github)](https://github.com/cccortesh95)
 - 🧑‍💻 **Johnny Castañeda** — [![GitHub](https://img.shields.io/badge/GitHub-@Johnny--Castaneda--Marin-181717?logo=github)](https://github.com/Johnny-Castaneda-Marin)
 - 🧑‍💻 **Benkos Triana** — [![GitHub](https://img.shields.io/badge/GitHub-@BenkosT-181717?logo=github)](https://github.com/BenkosT)
+
+---
+
+> Pontificia Universidad Javeriana — Maestría en Inteligencia Artificial — MLOps — Proyecto Final 2026-1

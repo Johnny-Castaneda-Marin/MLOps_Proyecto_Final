@@ -1,8 +1,3 @@
-# GitHub Actions workflow: Build, tag, and push Docker images per component
-# Requirements: 16.1, 16.2
-# Tags each image with the short SHA of the commit and "latest" (stable tag)
-# Publishes to DockerHub under cristiandiaz13/mlops-puj
-
 name: Build and Push Docker Images
 
 on:
