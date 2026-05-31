@@ -1,0 +1,55 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-data
+  labels:
+    part-of: mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-storage
+  labels:
+    part-of: mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-mlflow
+  labels:
+    part-of: mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-data-api
+  labels:
+    part-of: mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-api
+  labels:
+    part-of: mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-ui
+  labels:
+    part-of: mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-loadtest
+  labels:
+    part-of: mlops-platform
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops-monitoring
+  labels:
+    part-of: mlops-platform

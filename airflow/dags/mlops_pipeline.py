@@ -11,7 +11,14 @@ from fetch_batch import fetch_batch
 from store_raw import store_raw_batch
 from validate import validate_schema, validate_quality, detect_drift, decide_training
 from preprocess import preprocess_data
-from train import train_and_promote, skip_training, log_result
+from train import (
+    train_candidates,
+    compare_models,
+    promote_or_reject,
+    skip_training,
+    log_result,
+    train_and_promote,  # legacy: conservado para compatibilidad
+)
 
 default_args = {
     "owner": "mlops",
@@ -67,9 +74,19 @@ with DAG(
         python_callable=preprocess_data,
     )
 
-    t_train = PythonOperator(
-        task_id="train_and_promote",
-        python_callable=train_and_promote,
+    t_train_candidates = PythonOperator(
+        task_id="train_candidates",
+        python_callable=train_candidates,
+    )
+
+    t_compare = PythonOperator(
+        task_id="compare_models",
+        python_callable=compare_models,
+    )
+
+    t_promote = PythonOperator(
+        task_id="promote_or_reject",
+        python_callable=promote_or_reject,
     )
 
     t_skip = PythonOperator(
@@ -89,5 +106,5 @@ with DAG(
     )
 
     start >> t_fetch >> t_store_raw >> t_validate_schema >> t_validate_quality >> t_detect_drift >> t_decide
-    t_decide >> t_preprocess >> t_train >> t_log >> end
+    t_decide >> t_preprocess >> t_train_candidates >> t_compare >> t_promote >> t_log >> end
     t_decide >> t_skip >> t_log >> end

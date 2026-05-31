@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamlit
+  namespace: mlops-ui
+  labels:
+    app: streamlit
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamlit
+  template:
+    metadata:
+      labels:
+        app: streamlit
+    spec:
+      containers:
+        - name: streamlit
+          image: mlops-streamlit:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8501
+              protocol: TCP
+          env:
+            - name: API_URL
+              valueFrom:
+                secretKeyRef:
+                  name: streamlit-secret
+                  key: API_URL
+            - name: POSTGRES_CLEAN_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: streamlit-secret
+                  key: POSTGRES_CLEAN_CONN
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /_stcore/health
+              port: 8501
+            initialDelaySeconds: 20
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3

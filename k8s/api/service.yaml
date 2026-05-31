@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: inference-api-service
+  namespace: mlops-api
+  labels:
+    app: inference-api
+spec:
+  selector:
+    app: inference-api
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

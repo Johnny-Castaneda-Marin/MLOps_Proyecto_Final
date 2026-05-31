@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: data-api
-  namespace: mlops
+  namespace: mlops-data-api
 spec:
   replicas: 1
   selector:

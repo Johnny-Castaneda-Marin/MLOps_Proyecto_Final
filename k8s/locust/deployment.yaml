@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: locust
+  namespace: mlops-loadtest
+  labels:
+    app: locust
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: locust
+  template:
+    metadata:
+      labels:
+        app: locust
+    spec:
+      containers:
+        - name: locust
+          image: cristiandiaz13/mlops-puj:locust-latest
+          args:
+            - "--host=http://inference-api-service.mlops-api.svc.cluster.local:8000"
+            - "--users=50"
+            - "--spawn-rate=5"
+            - "--headless"
+            - "--run-time=5m"
+          ports:
+            - containerPort: 8089
+              name: web-ui
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8089
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8089
+            initialDelaySeconds: 10
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: locust-service
+  namespace: mlops-loadtest
+  labels:
+    app: locust
+spec:
+  type: ClusterIP
+  selector:
+    app: locust
+  ports:
+    - port: 8089
+      targetPort: 8089
+      protocol: TCP
+      name: web-ui

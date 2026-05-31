@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: inference-api
+  namespace: mlops-api
+  labels:
+    app: inference-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: inference-api
+  template:
+    metadata:
+      labels:
+        app: inference-api
+    spec:
+      containers:
+        - name: inference-api
+          image: mlops-inference-api:latest
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 8000
+              protocol: TCP
+          env:
+            - name: MLFLOW_TRACKING_URI
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: MLFLOW_TRACKING_URI
+            - name: MLFLOW_MODEL_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: MLFLOW_MODEL_NAME
+            - name: MLFLOW_CHAMPION_ALIAS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: MLFLOW_CHAMPION_ALIAS
+            - name: POSTGRES_RAW_CONN
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: POSTGRES_RAW_CONN
+            - name: API_ADMIN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: API_ADMIN_TOKEN
+            - name: RELOAD_INTERVAL_SECONDS
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: RELOAD_INTERVAL_SECONDS
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3

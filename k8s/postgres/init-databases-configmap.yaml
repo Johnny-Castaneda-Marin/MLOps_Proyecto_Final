@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init-scripts
+  namespace: mlops-data
+data:
+  init-databases.sql: |
+    -- Create dedicated databases for each service
+    -- This script runs automatically on first PostgreSQL startup
+
+    SELECT 'CREATE DATABASE raw_db'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'raw_db')\gexec
+
+    SELECT 'CREATE DATABASE clean_db'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'clean_db')\gexec
+
+    SELECT 'CREATE DATABASE mlflow_db'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'mlflow_db')\gexec
+
+    SELECT 'CREATE DATABASE airflow_db'
+    WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'airflow_db')\gexec

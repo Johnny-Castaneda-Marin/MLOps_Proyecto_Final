@@ -125,9 +125,10 @@ kubectl apply -f k8s/namespace/namespace.yaml
 kubectl apply -f k8s/postgres/
 kubectl wait --for=condition=Ready pod/postgres-0 -n mlops --timeout=120s
 
-# Crear bases de datos
+# Crear bases de datos (se crean automáticamente via init script, pero se pueden crear manualmente si es necesario)
 kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE raw_db;"
 kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE clean_db;"
+kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE mlflow_db;"
 kubectl exec -it postgres-0 -n mlops -- psql -U mlops_user -d mlops_db -c "CREATE DATABASE airflow_db;"
 ```
 

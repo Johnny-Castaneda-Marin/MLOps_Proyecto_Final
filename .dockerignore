@@ -1,0 +1,29 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+.pytest_cache
+.hypothesis
+.venv
+venv
+
+# IDE
+.vscode
+.idea
+
+# Kiro specs
+.kiro
+
+# Tests (not needed in production images)
+tests/
+
+# Other components not needed for API build
+airflow/
+streamlit/
+locust/
+k8s/
+.github/

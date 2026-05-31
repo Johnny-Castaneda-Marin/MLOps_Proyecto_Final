@@ -1,0 +1,9 @@
+# Dependencias de desarrollo y pruebas para mlops_core y los componentes.
+# Framework de pruebas: pytest + Hypothesis (pruebas basadas en propiedades).
+pytest>=7.4
+hypothesis>=6.100
+
+# Utilizadas por la lógica de validación/ingeniería de variables y los tests.
+pandas>=2.0
+numpy>=1.24
+scikit-learn>=1.3

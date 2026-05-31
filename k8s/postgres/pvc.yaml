@@ -2,7 +2,7 @@ apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
   name: postgres-pvc
-  namespace: mlops
+  namespace: mlops-data
 spec:
   accessModes:
     - ReadWriteOnce

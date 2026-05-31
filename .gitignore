@@ -5,3 +5,11 @@ __pycache__/
 *.egg-info/
 .DS_Store
 *.log
+.pytest_cache/
+.hypothesis/
+
+# PDFs
+*.pdf
+
+# Kiro
+.kiro/

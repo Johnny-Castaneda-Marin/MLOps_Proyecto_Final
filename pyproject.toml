@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mlops-real-estate-platform"
+version = "0.1.0"
+description = "Plataforma MLOps de predicción de precios de inmuebles (PUJ)."
+requires-python = ">=3.10"
+
+[tool.setuptools]
+packages = ["mlops_core"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra"
+markers = [
+    "integration: pruebas de integración con I/O real (p. ej. base de datos). Pueden omitirse si faltan dependencias como SQLAlchemy.",
+]

@@ -2,7 +2,7 @@ apiVersion: batch/v1
 kind: Job
 metadata:
   name: minio-create-bucket
-  namespace: mlops
+  namespace: mlops-storage
 spec:
   template:
     spec:
@@ -21,6 +21,6 @@ spec:
             - /bin/sh
             - -c
             - |
-              mc alias set myminio http://minio-service:9000 minioadmin minioadmin123
+              mc alias set myminio http://minio-service.mlops-storage.svc.cluster.local:9000 minioadmin minioadmin123
               mc mb myminio/mlflow --ignore-existing
               echo "Bucket creado exitosamente"

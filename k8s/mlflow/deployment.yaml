@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: mlflow
-  namespace: mlops
+  namespace: mlops-mlflow
 spec:
   replicas: 1
   selector:

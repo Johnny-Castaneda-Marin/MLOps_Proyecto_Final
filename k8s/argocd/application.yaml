@@ -3,16 +3,42 @@ kind: Application
 metadata:
   name: mlops-proyecto-final
   namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: mlops-platform
+    app.kubernetes.io/managed-by: argocd
+  annotations:
+    # Components managed by this Application (each in its own namespace):
+    # - k8s/namespace/       (Namespace definitions)
+    # - k8s/postgres/        (mlops-data: StatefulSet, Service, Secret, ConfigMap, PVC)
+    # - k8s/minio/           (mlops-storage: StatefulSet, Service, Secret, PVC, Job)
+    # - k8s/mlflow/          (mlops-mlflow: Deployment, Service, Secret)
+    # - k8s/data-api/        (mlops-data-api: Deployment, Service)
+    # - k8s/api/             (mlops-api: Deployment, Service, Secret)
+    # - k8s/streamlit/       (mlops-ui: Deployment, Service, Secret)
+    # - k8s/locust/          (mlops-loadtest: Deployment, Service)
+    # - k8s/prometheus/      (mlops-monitoring: Deployment, Service, ConfigMap)
+    # - k8s/grafana/         (mlops-monitoring: Deployment, Service, ConfigMaps)
+    argocd.argoproj.io/description: |
+      MLOps Real Estate Platform - GitOps declarative deployment.
+      Syncs all Kubernetes manifests from k8s/ directory recursively.
+      Each component deploys to its own namespace.
 spec:
   project: default
   source:
-    repoURL: https://github.com/Johnny-Castaneda-Marin/MLOps_Proyecto_Final.git
+    # TODO: Replace with your repository URL
+    repoURL: https://github.com/YOUR_ORG/Proyecto3.git
     targetRevision: main
     path: k8s
+    directory:
+      recurse: true
+      exclude: '{airflow/values.yaml}'
   destination:
     server: https://kubernetes.default.svc
-    namespace: mlops
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true

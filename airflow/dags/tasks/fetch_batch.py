@@ -1,10 +1,59 @@
-import requests
+"""Adaptador de Airflow para la ingesta incremental de lotes (RF1, RF12).
+
+Este adaptador conserva la responsabilidad de I/O (lectura del conteo en
+``batch_control``, llamada a la ``Data_API`` con ``timeout=120``, persistencia
+de metadatos y publicación de XComs) y delega las decisiones de negocio
+—selección de día por índice acumulado y detección de agotamiento— a las
+funciones puras de :mod:`mlops_core.ingest` (``select_day`` / ``is_exhausted``).
+"""
+
 import logging
+import sys
 from datetime import datetime
+from pathlib import Path
+
+import requests
 from sqlalchemy import create_engine, text
+
 from config import DATA_API_URL, GROUP_NUMBER, POSTGRES_RAW_CONN, DAYS
 
+
+def _ensure_mlops_core_importable() -> None:
+    """Garantiza que el paquete ``mlops_core`` sea importable.
+
+    El DAG inserta ``dags/tasks`` en ``sys.path`` (no la raíz del repositorio),
+    por lo que ``import mlops_core`` puede fallar al ejecutarse desde Airflow.
+    Esta función:
+
+    1. Intenta importar ``mlops_core`` directamente (caso en que el paquete está
+       instalado en el contenedor o ya disponible en ``sys.path``).
+    2. Si falla, asciende por los directorios ancestros del archivo hasta hallar
+       el que contiene ``mlops_core/__init__.py`` (la raíz del repositorio) y lo
+       inserta en ``sys.path``.
+
+    Es idempotente y no altera los imports ``from config import ...`` existentes.
+    """
+    try:
+        import mlops_core  # noqa: F401
+        return
+    except ImportError:
+        pass
+
+    here = Path(__file__).resolve()
+    for ancestor in here.parents:
+        if (ancestor / "mlops_core" / "__init__.py").exists():
+            ancestor_str = str(ancestor)
+            if ancestor_str not in sys.path:
+                sys.path.insert(0, ancestor_str)
+            break
+
+
+_ensure_mlops_core_importable()
+
+from mlops_core.ingest import select_day, is_exhausted  # noqa: E402
+
 logger = logging.getLogger(__name__)
+
 
 def fetch_batch(**context):
     engine = create_engine(POSTGRES_RAW_CONN)
@@ -22,13 +71,16 @@ def fetch_batch(**context):
         result = conn.execute(text("SELECT COUNT(*) FROM batch_control")).fetchone()
         batch_index = result[0]
 
-    if batch_index >= len(DAYS):
-        logger.info("No more days available")
+    # Agotamiento por índice acumulado: si el índice alcanza el número de días
+    # disponibles, no hay más datos que solicitar (RF1.6). Se delega la regla a
+    # mlops_core.ingest y se finaliza sin error ni inserción de registros.
+    if is_exhausted(batch_index, None, days=DAYS):
+        logger.info("No more days available (batch_index=%s)", batch_index)
         context['ti'].xcom_push(key='data_exhausted', value=True)
         engine.dispose()
         return
 
-    day = DAYS[batch_index]
+    day = select_day(batch_index, days=DAYS)
     logger.info(f"Fetching batch for day: {day}")
 
     try:
@@ -37,8 +89,16 @@ def fetch_batch(**context):
             params={"group_number": GROUP_NUMBER, "day": day},
             timeout=120
         )
-        if response.status_code == 400:
-            detail = response.json().get("detail", "")
+
+        # Agotamiento señalado por la Data_API (HTTP 400 de fin de datos): se
+        # registra el metadato con estado 'exhausted' y se finaliza sin error
+        # ni inserción de registros (RF1.6, RF12.1).
+        if is_exhausted(batch_index, response.status_code, days=DAYS):
+            detail = ""
+            try:
+                detail = response.json().get("detail", "")
+            except ValueError:
+                detail = response.text
             logger.info(f"API exhausted: {detail}")
             with engine.begin() as conn:
                 conn.execute(text("""
@@ -49,16 +109,20 @@ def fetch_batch(**context):
             engine.dispose()
             return
 
+        # Cualquier otro error HTTP (4xx/5xx distinto del agotamiento) hace
+        # fallar la tarea preservando los metadatos ya registrados (RF1.7,
+        # RF12.1, RF12.3).
         response.raise_for_status()
         data = response.json()
         batch_number = data["batch_number"]
         records = data["data"]
         logger.info(f"Received batch {batch_number} with {len(records)} records")
 
+        # Persistencia de metadatos de ejecución en UTC (RF1.3).
         with engine.begin() as conn:
             conn.execute(text("""
-                INSERT INTO batch_control (batch_number, day_used, records_count, fetched_at)
-                VALUES (:bn, :day, :cnt, :ts)
+                INSERT INTO batch_control (batch_number, day_used, records_count, fetched_at, status)
+                VALUES (:bn, :day, :cnt, :ts, 'fetched')
             """), {"bn": batch_number, "day": day, "cnt": len(records), "ts": datetime.utcnow()})
 
         context['ti'].xcom_push(key='batch_number', value=batch_number)
