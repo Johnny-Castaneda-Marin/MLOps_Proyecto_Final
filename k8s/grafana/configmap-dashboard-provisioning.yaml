@@ -6,7 +6,7 @@ metadata:
   labels:
     app: grafana
 data:
-  dashboards.yml: |
+  dashboards.yml: | 
     apiVersion: 1
 
     providers:
