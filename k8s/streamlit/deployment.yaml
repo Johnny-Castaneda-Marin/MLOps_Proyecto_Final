@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: streamlit
-          image: mlops-streamlit:latest
-          imagePullPolicy: Never
+          image: johnnycastaneda10/mlops-puj-streamlit:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8501
               protocol: TCP
@@ -45,14 +45,3 @@ spec:
               path: /_stcore/health
               port: 8501
             initialDelaySeconds: 10
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
-          livenessProbe:
-            httpGet:
-              path: /_stcore/health
-              port: 8501
-            initialDelaySeconds: 20
-            periodSeconds: 15
-            timeoutSeconds: 5
-            failureThreshold: 3
