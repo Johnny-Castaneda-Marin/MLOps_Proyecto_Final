@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: inference-api
-          image: mlops-inference-api:latest
-          imagePullPolicy: Never
+          image: johnnycastaneda10/mlops-puj-api:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               protocol: TCP
