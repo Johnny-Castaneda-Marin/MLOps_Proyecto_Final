@@ -22,7 +22,4 @@ venv
 tests/
 
 # Other components not needed for API build
-airflow/
-locust/
-k8s/
 .github/
