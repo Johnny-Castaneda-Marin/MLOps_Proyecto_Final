@@ -17,8 +17,8 @@ spec:
     spec:
       containers:
         - name: inference-api
-          image: mlops-inference-api:latest
-          imagePullPolicy: Never
+          image: johnnycastaneda10/mlops-puj-api:latest
+          imagePullPolicy: Always
           ports:
             - containerPort: 8000
               protocol: TCP
@@ -53,6 +53,21 @@ spec:
                 secretKeyRef:
                   name: api-secret
                   key: RELOAD_INTERVAL_SECONDS
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: AWS_ACCESS_KEY_ID
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: AWS_SECRET_ACCESS_KEY
+            - name: MLFLOW_S3_ENDPOINT_URL
+              valueFrom:
+                secretKeyRef:
+                  name: api-secret
+                  key: MLFLOW_S3_ENDPOINT_URL
           resources:
             requests:
               cpu: "250m"

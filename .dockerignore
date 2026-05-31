@@ -23,7 +23,6 @@ tests/
 
 # Other components not needed for API build
 airflow/
-streamlit/
 locust/
 k8s/
 .github/
