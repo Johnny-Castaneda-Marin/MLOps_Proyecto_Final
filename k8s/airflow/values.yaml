@@ -39,7 +39,15 @@ env:
 
 dags:
   gitSync:
-    enabled: false
+    enabled: true
+    repo: https://github.com/Johnny-Castaneda-Marin/MLOps_Proyecto_Final.git
+    branch: main
+    rev: HEAD
+    depth: 1
+    maxFailures: 3
+    subPath: airflow/dags
+    credentialsSecret: airflow-gitsync-secret
+    period: 30s
 
 resources:
   requests:
