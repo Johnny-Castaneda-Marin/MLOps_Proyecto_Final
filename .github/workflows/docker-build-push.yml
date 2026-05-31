@@ -99,6 +99,7 @@ jobs:
           context: .
           file: streamlit/Dockerfile
           push: true
+          no-cache: true
           tags: |
             ${{ env.IMAGE_PREFIX }}-streamlit:${{ steps.sha.outputs.short_sha }}
             ${{ env.IMAGE_PREFIX }}-streamlit:latest
