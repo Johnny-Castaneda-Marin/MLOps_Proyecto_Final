@@ -133,13 +133,7 @@ data:
           ],
           "fieldConfig": {
             "defaults": {
-              "color": { "mode": "thresholds" },
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  { "color": "green", "value": null }
-                ]
-              },
+              "color": { "mode": "fixed", "fixedColor": "green" },
               "mappings": []
             },
             "overrides": []
@@ -148,9 +142,9 @@ data:
             "reduceOptions": {
               "values": false,
               "calcs": ["lastNotNull"],
-              "fields": "/^version$/"
+              "fields": ""
             },
-            "textMode": "value_and_name",
+            "textMode": "name",
             "colorMode": "background",
             "graphMode": "none",
             "justifyMode": "auto"
