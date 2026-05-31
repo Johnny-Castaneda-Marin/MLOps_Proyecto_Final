@@ -1,8 +1,8 @@
 images:
   airflow:
-    repository: mlops-airflow
+    repository: johnnycastaneda10/mlops-puj-airflow
     tag: latest
-    pullPolicy: Never
+    pullPolicy: Always
 
 executor: LocalExecutor
 
@@ -23,15 +23,15 @@ env:
   - name: AIRFLOW__CORE__LOAD_EXAMPLES
     value: "false"
   - name: DATA_API_URL
-    value: "http://data-api-service"
+    value: "http://data-api-service.mlops-data-api.svc.cluster.local"
   - name: POSTGRES_RAW_CONN
-    value: "postgresql://mlops_user:mlops1234@postgres-service:5432/raw_db"
+    value: "postgresql://mlops_user:mlops1234@postgres-service.mlops-data.svc.cluster.local:5432/raw_db"
   - name: POSTGRES_CLEAN_CONN
-    value: "postgresql://mlops_user:mlops1234@postgres-service:5432/clean_db"
+    value: "postgresql://mlops_user:mlops1234@postgres-service.mlops-data.svc.cluster.local:5432/clean_db"
   - name: MLFLOW_TRACKING_URI
-    value: "http://mlflow-service:5000"
+    value: "http://mlflow-service.mlops-mlflow.svc.cluster.local:5000"
   - name: MLFLOW_S3_ENDPOINT_URL
-    value: "http://minio-service:9000"
+    value: "http://minio-service.mlops-storage.svc.cluster.local:9000"
   - name: AWS_ACCESS_KEY_ID
     value: "minioadmin"
   - name: AWS_SECRET_ACCESS_KEY
