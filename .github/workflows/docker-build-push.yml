@@ -239,25 +239,26 @@ jobs:
         env:
           TAG: ${{ steps.sha.outputs.short_sha }}
           PREFIX: ${{ env.IMAGE_PREFIX }}
-          DISPATCH: ${{ github.event_name == 'workflow_dispatch' }}
-          CH_API: ${{ needs.detect-changes.outputs.api }}
-          CH_STREAMLIT: ${{ needs.detect-changes.outputs.streamlit }}
-          CH_AIRFLOW: ${{ needs.detect-changes.outputs.airflow }}
-          CH_LOCUST: ${{ needs.detect-changes.outputs.locust }}
-          CH_MLFLOW: ${{ needs.detect-changes.outputs.mlflow }}
+          # Solo se fija el tag de un componente si SU build terminó en 'success'.
+          # Si el build falló o se omitió (sin cambios), su tag no se toca.
+          R_API: ${{ needs.build-api.result }}
+          R_STREAMLIT: ${{ needs.build-streamlit.result }}
+          R_AIRFLOW: ${{ needs.build-airflow.result }}
+          R_LOCUST: ${{ needs.build-locust.result }}
+          R_MLFLOW: ${{ needs.build-mlflow.result }}
         run: |
           set -euo pipefail
           pin_deploy() { # $1=archivo  $2=sufijo-imagen
             sed -i -E "s#(image: ${PREFIX}-$2:).*#\1${TAG}#" "$1"
             echo "Pinned $1 -> ${PREFIX}-$2:${TAG}"
           }
-          built() { [ "$DISPATCH" = "true" ] || [ "$1" = "true" ]; }
+          ok() { [ "$1" = "success" ]; }
 
-          built "$CH_API"       && pin_deploy k8s/api/deployment.yaml       api       || true
-          built "$CH_STREAMLIT" && pin_deploy k8s/streamlit/deployment.yaml streamlit || true
-          built "$CH_LOCUST"    && pin_deploy k8s/locust/deployment.yaml    locust    || true
-          built "$CH_MLFLOW"    && pin_deploy k8s/mlflow/deployment.yaml    mlflow    || true
-          if built "$CH_AIRFLOW"; then
+          ok "$R_API"       && pin_deploy k8s/api/deployment.yaml       api       || true
+          ok "$R_STREAMLIT" && pin_deploy k8s/streamlit/deployment.yaml streamlit || true
+          ok "$R_LOCUST"    && pin_deploy k8s/locust/deployment.yaml    locust    || true
+          ok "$R_MLFLOW"    && pin_deploy k8s/mlflow/deployment.yaml    mlflow    || true
+          if ok "$R_AIRFLOW"; then
             yq -i '.images.airflow.tag = strenv(TAG)' k8s/airflow/values.yaml
             echo "Pinned k8s/airflow/values.yaml -> images.airflow.tag=${TAG}"
           fi
