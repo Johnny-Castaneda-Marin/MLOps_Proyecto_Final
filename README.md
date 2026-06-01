@@ -4,22 +4,22 @@ Plataforma MLOps de extremo a extremo para la predicción de precios de bienes r
 
 ## Tabla de Contenidos
 
-1. [Arquitectura](#1-arquitectura)
-2. [Estructura del Proyecto](#2-estructura-del-proyecto)
-3. [Componentes y Namespaces](#3-componentes-y-namespaces)
-4. [Capa de Lógica Pura `mlops_core`](#4-capa-de-lógica-pura-mlops_core)
-5. [Pipeline de Airflow](#5-pipeline-de-airflow)
-6. [Bases de Datos y Backends](#6-bases-de-datos-y-backends)
-7. [API de Inferencia (FastAPI)](#7-api-de-inferencia-fastapi)
-8. [Interfaz Streamlit](#8-interfaz-streamlit)
-9. [Observabilidad: Prometheus + Grafana](#9-observabilidad-prometheus--grafana)
-10. [Pruebas de Carga con Locust](#10-pruebas-de-carga-con-locust)
-11. [CI/CD y GitOps](#11-cicd-y-gitops)
-12. [Pruebas Basadas en Propiedades](#12-pruebas-basadas-en-propiedades)
-13. [Despliegue](#13-despliegue)
-14. [Evidencias](#14-evidencias)
-15. [Colaboradores](#15-colaboradores)
 
+- 01 🏗️ [Arquitectura](#1-arquitectura)
+- 02 📁 [Estructura del Proyecto](#2-estructura-del-proyecto)
+- 03 🧩 [Componentes y Namespaces](#3-componentes-y-namespaces)
+- 04 🧠 [Capa de Lógica Pura `mlops_core`](#4-capa-de-lógica-pura-mlops_core)
+- 05 🔄 [Pipeline de Airflow](#5-pipeline-de-airflow)
+- 06 🗄️ [Bases de Datos y Backends](#6-bases-de-datos-y-backends)
+- 07 ⚡ [API de Inferencia (FastAPI)](#7-api-de-inferencia-fastapi)
+- 08 🖥️ [Interfaz Streamlit](#8-interfaz-streamlit)
+- 09 📊 [Observabilidad: Prometheus + Grafana](#9-observabilidad-prometheus--grafana)
+- 10 🔥 [Pruebas de Carga con Locust](#10-pruebas-de-carga-con-locust)
+- 11 🚀 [CI/CD y GitOps](#11-cicd-y-gitops)
+- 12 🧪 [Pruebas Basadas en Propiedades](#12-pruebas-basadas-en-propiedades)
+- 13 📦 [Despliegue](#13-despliegue)
+- 14 📸 [Evidencias](#14-evidencias)
+- 15 👥 [Colaboradores](#15-colaboradores)
 ---
 
 ## 1. Arquitectura
