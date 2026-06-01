@@ -11,7 +11,7 @@ data:
   metadataConnection:
     user: mlops_user
     pass: mlops1234
-    host: postgres-service
+    host: postgres-service.mlops-data.svc.cluster.local
     port: 5432
     db: airflow_db
     sslmode: disable
@@ -46,7 +46,6 @@ dags:
     depth: 1
     maxFailures: 3
     subPath: airflow/dags
-    credentialsSecret: airflow-gitsync-secret
     period: 30s
 
 resources:
@@ -74,3 +73,7 @@ webserver:
     limits:
       cpu: "1000m"
       memory: "1Gi"
+
+# Deshabilitar el api-server (requiere Airflow 2.10+, nuestra imagen es 2.9.1)
+apiServer:
+  enabled: false
