@@ -16,7 +16,7 @@ spec:
       containers:
         - name: mlflow
           image: johnnycastaneda10/mlops-puj-mlflow:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           command:
             - mlflow
             - server

@@ -18,7 +18,7 @@ spec:
       containers:
         - name: locust
           image: johnnycastaneda10/mlops-puj-locust:latest
-          imagePullPolicy: IfNotPresent
+          imagePullPolicy: Always
           args:
             - "--host=http://inference-api-service.mlops-api.svc.cluster.local:8000"
           ports:

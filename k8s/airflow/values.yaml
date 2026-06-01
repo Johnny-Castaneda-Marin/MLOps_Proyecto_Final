@@ -2,7 +2,7 @@ images:
   airflow:
     repository: johnnycastaneda10/mlops-puj-airflow
     tag: latest
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
 executor: LocalExecutor
 data:
   metadataSecretName: ~
@@ -65,13 +65,8 @@ webserver:
     limits:
       cpu: "500m"
       memory: "512Mi"
-# Airflow 3.x usa api-server en lugar de webserver
 apiServer:
   enabled: true
-# Logs LOCALES y persistentes en un PVC compartido por los componentes de
-# Airflow (scheduler, api-server, triggerer, dag-processor). No se usa logging
-# remoto (S3/MinIO): los logs viven en el clúster y la UI los lee desde el
-# volumen compartido.
 config:
   core:
     colored_console_log: "False"
@@ -82,10 +77,4 @@ config:
 logs:
   persistence:
     enabled: true
-    # El chart 1.15.0 fuerza ReadWriteMany en su PVC interno, lo cual no soporta
-    # la StorageClass de kind (local-path). Por eso usamos un PVC propio,
-    # ReadWriteOnce, definido en k8s/airflow/logs-pvc.yaml (lo crea Argo CD).
-    # En un clúster de un solo nodo, RWO permite que todos los pods de Airflow
-    # (scheduler, api-server, triggerer, dag-processor) compartan el volumen,
-    # porque RWO limita por NODO, no por pod.
     existingClaim: airflow-logs
