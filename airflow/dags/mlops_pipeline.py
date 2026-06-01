@@ -31,7 +31,7 @@ with DAG(
     dag_id="mlops_pipeline",
     default_args=default_args,
     description="MLOps pipeline: ingest, validate, train, promote",
-    schedule_interval="*/5 * * * *",
+    schedule="*/5 * * * *",
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["mlops", "real_estate"],
