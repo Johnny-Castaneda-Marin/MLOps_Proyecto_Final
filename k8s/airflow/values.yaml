@@ -36,9 +36,6 @@ env:
     value: "minioadmin"
   - name: AWS_SECRET_ACCESS_KEY
     value: "minioadmin123"
-  # Conexión S3 hacia MinIO para remote logging (RF: logs centralizados)
-  - name: AIRFLOW_CONN_MINIO_S3
-    value: "aws://minioadmin:minioadmin123@/?endpoint_url=http%3A%2F%2Fminio-service.mlops-storage.svc.cluster.local%3A9000"
 
 dags:
   gitSync:
@@ -81,18 +78,27 @@ webserver:
 apiServer:
   enabled: true
 
-# Remote logging a MinIO (S3) — evita served-logs HTTP y PVC
+# Logs LOCALES y persistentes en un PVC compartido por los componentes de
+# Airflow (scheduler, api-server, triggerer, dag-processor). No se usa logging
+# remoto (S3/MinIO): los logs viven en el clúster y la UI los lee desde el
+# volumen compartido.
 config:
   core:
     colored_console_log: "False"
   logging:
-    remote_logging: "True"
-    remote_base_log_folder: "s3://mlflow/airflow-logs"
-    remote_log_conn_id: "minio_s3"
-    encrypt_s3_logs: "False"
+    remote_logging: "False"
   webserver:
     expose_config: "True"
 
 logs:
   persistence:
-    enabled: false
+    enabled: true
+    size: 5Gi
+    # storageClassName vacío => usa la StorageClass por defecto del clúster
+    # (consistente con postgres-pvc y minio-pvc).
+    storageClassName: ""
+    # ReadWriteOnce funciona en un clúster de un solo nodo: todos los pods de
+    # Airflow se programan en el mismo nodo y comparten el volumen (RWO limita
+    # por NODO, no por pod). Si migras a multinodo, cambia a ReadWriteMany con
+    # una StorageClass que lo soporte (NFS, Longhorn, EFS, etc.).
+    accessMode: ReadWriteOnce

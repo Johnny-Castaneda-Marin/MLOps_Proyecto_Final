@@ -18,7 +18,7 @@ spec:
       containers:
         - name: streamlit
           image: johnnycastaneda10/mlops-puj-streamlit:latest
-          imagePullPolicy: Always
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8501
               protocol: TCP
