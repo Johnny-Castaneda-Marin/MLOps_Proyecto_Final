@@ -1,7 +1,7 @@
 images:
   airflow:
     repository: johnnycastaneda10/mlops-puj-airflow
-    tag: 3db418c
+    tag: latest
     pullPolicy: IfNotPresent
 executor: LocalExecutor
 data:
@@ -82,12 +82,10 @@ config:
 logs:
   persistence:
     enabled: true
-    size: 5Gi
-    # storageClassName vacío => usa la StorageClass por defecto del clúster
-    # (consistente con postgres-pvc y minio-pvc).
-    storageClassName: ""
-    # ReadWriteOnce funciona en un clúster de un solo nodo: todos los pods de
-    # Airflow se programan en el mismo nodo y comparten el volumen (RWO limita
-    # por NODO, no por pod). Si migras a multinodo, cambia a ReadWriteMany con
-    # una StorageClass que lo soporte (NFS, Longhorn, EFS, etc.).
-    accessMode: ReadWriteOnce
+    # El chart 1.15.0 fuerza ReadWriteMany en su PVC interno, lo cual no soporta
+    # la StorageClass de kind (local-path). Por eso usamos un PVC propio,
+    # ReadWriteOnce, definido en k8s/airflow/logs-pvc.yaml (lo crea Argo CD).
+    # En un clúster de un solo nodo, RWO permite que todos los pods de Airflow
+    # (scheduler, api-server, triggerer, dag-processor) compartan el volumen,
+    # porque RWO limita por NODO, no por pod.
+    existingClaim: airflow-logs
