@@ -50,35 +50,35 @@ dags:
 
 resources:
   requests:
-    cpu: "500m"
-    memory: "1Gi"
+    cpu: "100m"
+    memory: "256Mi"
   limits:
-    cpu: "4000m"
-    memory: "3Gi"
+    cpu: "1000m"
+    memory: "1Gi"
 
 scheduler:
   resources:
     requests:
-      cpu: "250m"
-      memory: "512Mi"
+      cpu: "100m"
+      memory: "256Mi"
     limits:
-      cpu: "4000m"
-      memory: "1Gi"
+      cpu: "1000m"
+      memory: "512Mi"
 
 webserver:
   resources:
     requests:
-      cpu: "250m"
-      memory: "512Mi"
+      cpu: "100m"
+      memory: "256Mi"
     limits:
-      cpu: "1000m"
-      memory: "1Gi"
+      cpu: "500m"
+      memory: "512Mi"
 
 # Airflow 3.x usa api-server en lugar de webserver
 apiServer:
   enabled: true
 
-# Configurar logs para evitar el error de resolución DNS del scheduler
+# Logs en filesystem local del pod (sin PVC)
 config:
   core:
     colored_console_log: "False"
@@ -87,7 +87,6 @@ config:
   webserver:
     expose_config: "True"
 
-# Habilitar el servicio headless del scheduler para resolución de logs
-scheduler:
-  logGroomerSidecar:
-    enabled: true
+logs:
+  persistence:
+    enabled: false
