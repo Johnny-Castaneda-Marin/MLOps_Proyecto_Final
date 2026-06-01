@@ -315,24 +315,48 @@ Prometheus hace scrape de la API y Grafana presenta un dashboard con throughput,
 
 ## 10. Pruebas de Carga con Locust
 
-Locust ejecuta escenarios de carga contra `/predict` con payloads aleatorios realistas. Define dos perfiles de usuario:
+Locust se despliega en **modo web UI** exponiendo su interfaz en el puerto 8089.
+Define dos perfiles de usuario:
 
 - **`PredictUser`**: carga sostenida (espera 1–3 s entre peticiones).
 - **`AggressiveUser`**: carga pico (espera 0.1–0.5 s entre peticiones).
 
-Locust se despliega en **modo web UI**: arranca de forma persistente exponiendo su interfaz en el puerto 8089, desde donde se define el número de usuarios y el spawn rate y se lanza la prueba contra `/predict`. El efecto de la carga se observa en el dashboard de Grafana.
-
 ```bash
-# Acceder a la UI de Locust
 kubectl port-forward -n mlops-loadtest svc/locust-service 8089:8089
 # Abrir http://localhost:8089
 ```
 
-<!-- Imagen: Estadísticas de Locust (RPS, latencias) -->
-<!-- ![Locust stats](images/locust_stats.png) -->
+### Resultados de la prueba
 
-<!-- Imagen: Latencia en Grafana durante la prueba de carga -->
-<!-- ![Grafana bajo carga](images/grafana_carga.png) -->
+La prueba se ejecutó con **50 usuarios concurrentes** contra el endpoint `/predict`
+durante aproximadamente 2 horas, obteniendo los siguientes resultados:
+
+| Endpoint | Requests | Fallos | Mediana (ms) | p95 (ms) | p99 (ms) | Promedio (ms) | RPS |
+|---|---|---|---|---|---|---|---|
+| `GET /health` | 2,205 | 0 | 3 | 4 | 6 | 2.74 | 1.1 |
+| `POST /predict` | 176,525 | 0 | 3 | 5 | 6 | 3.53 | 92.4 |
+| **Total** | **178,730** | **0** | **3** | **5** | **6** | **3.52** | **93.5** |
+
+### Análisis
+
+- **0% de fallos** en más de 178,000 requests totales — la API es estable bajo carga sostenida.
+- **Throughput sostenido de ~93 RPS** con 50 usuarios concurrentes.
+- **Latencia p99 de 6 ms** — la inferencia es extremadamente rápida incluso en el percentil 99.
+- **Latencia promedio de 3.5 ms** en `/predict` — el modelo Ridge cargado en memoria responde en tiempo constante.
+- El gráfico de RPS muestra oscilaciones al inicio (spawn progresivo de usuarios) que se estabilizan en ~90 RPS sostenido.
+- La caída visible alrededor de las 7:52 corresponde a una interrupción temporal del port-forward, no a un fallo de la API.
+
+### Capacidad estimada
+
+Con 50 usuarios generando ~93 RPS, la API puede proyectarse a:
+
+| Usuarios | RPS estimado | Requests/hora |
+|---|---|---|
+| 50 | ~93 | ~335,000 |
+| 100 | ~180 | ~648,000 |
+| 200 | ~350* | ~1,260,000* |
+
+*Estimado lineal sujeto a límites de recursos del contenedor (CPU: 1000m, Memory: 1Gi).
 
 ### Solución de problemas: pod de Locust en `CrashLoopBackOff`
 
