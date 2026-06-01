@@ -65,11 +65,6 @@ flowchart LR
     GRAF --> PROM
 ```
 
-La decisión de diseño central es la extracción de toda la lógica de negocio a una capa pura y testeable (`mlops_core`), de modo que las tareas de Airflow y la API se convierten en **adaptadores delgados** que solo manejan I/O y delegan las reglas de decisión.
-
-<!-- Imagen: Diagrama de arquitectura / vista general del despliegue -->
-<!-- ![Arquitectura](images/arquitectura.png) -->
-
 ---
 
 ## 2. Estructura del Proyecto
@@ -147,8 +142,6 @@ Cada aplicación se despliega en un namespace dedicado. La comunicación usa FQD
 | Grafana | `mlops-monitoring` | 3000 | Dashboards de carga/latencia |
 | Argo CD | `argocd` | 443 | Sincronización declarativa (GitOps) |
 
-<!-- Imagen: kubectl get pods -A mostrando los pods por namespace -->
-<!-- ![Pods por namespace](images/pods_namespaces.png) -->
 
 ---
 
@@ -201,11 +194,6 @@ flowchart TD
 - **`compare_models` / `promote_or_reject`**: compara el candidato contra el `champion` y reasigna el alias solo si mejora el MAE sin empeorar el RMSE.
 - **`log_result`**: registra la decisión, motivos e IDs de MLflow en `training_history`.
 
-<!-- Imagen: Graph View del DAG mlops_pipeline en Airflow -->
-<!-- ![DAG Graph View](images/dag_graph.png) -->
-
-<!-- Imagen: Ejecución exitosa del DAG (todos los tasks en verde) -->
-<!-- ![DAG exitoso](images/dag_exitoso.png) -->
 
 ---
 
@@ -227,11 +215,6 @@ El sistema usa PostgreSQL con bases dedicadas por dominio, creadas automáticame
 - **Artefactos**: bucket `s3://mlflow` en MinIO.
 - **Modelo registrado**: `real_estate_champion`, con alias de producción `champion`.
 
-<!-- Imagen: Bases de datos creadas en PostgreSQL -->
-<!-- ![Bases de datos](images/databases.png) -->
-
-<!-- Imagen: MLflow UI con experimentos y modelo registrado -->
-<!-- ![MLflow](images/mlflow_ui.png) -->
 
 ---
 
@@ -266,14 +249,6 @@ El `ModelHolder` mantiene el modelo y su versión en memoria, protegido con lock
 
 Cada solicitud (exitosa o fallida) se registra en la tabla `inference_log` de `raw_db`.
 
-<!-- Imagen: Swagger UI de la API en /docs -->
-<!-- ![Swagger UI](images/api_docs.png) -->
-
-<!-- Imagen: Respuesta exitosa de POST /predict -->
-<!-- ![Predicción](images/api_predict.png) -->
-
-<!-- Imagen: Respuesta de GET /health y GET /metrics -->
-<!-- ![Health y metrics](images/api_health_metrics.png) -->
 
 ---
 
@@ -396,11 +371,6 @@ livenessProbe:
 kubectl apply -f k8s/locust/deployment.yaml
 kubectl rollout restart deployment/locust -n mlops-loadtest
 ```
-
-> Nota: si en lugar de la UI se quiere una prueba que se ejecute automáticamente y termine, el recurso correcto es un `Job` (no un `Deployment`) y deben eliminarse los probes, ya que el contenedor está diseñado para finalizar.
-
-<!-- Imagen: Pod de Locust en estado Running tras el fix -->
-<!-- ![Locust running](images/locust_running.png) -->
 
 ---
 
@@ -645,4 +615,3 @@ Esta sección reúne las capturas de las pruebas realizadas sobre la plataforma.
 
 ---
 
-> Pontificia Universidad Javeriana — Maestría en Inteligencia Artificial — MLOps — Proyecto Final 2026-1
