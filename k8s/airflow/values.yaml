@@ -1,7 +1,7 @@
 images:
   airflow:
     repository: johnnycastaneda10/mlops-puj-airflow
-    tag: f004435
+    tag: 3db418c
     pullPolicy: IfNotPresent
 executor: LocalExecutor
 data:
