@@ -71,7 +71,7 @@ La decisión de diseño central es la extracción de toda la lógica de negocio 
 ## 2. Estructura del Proyecto
 
 ```
-Proyecto3/
+MLOps_Proyecto_Final/
 ├── airflow/                          # Orquestación del pipeline
 │   ├── dags/
 │   │   ├── mlops_pipeline.py         # DAG principal
