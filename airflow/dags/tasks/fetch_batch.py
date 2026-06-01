@@ -71,9 +71,6 @@ def fetch_batch(**context):
         result = conn.execute(text("SELECT COUNT(*) FROM batch_control")).fetchone()
         batch_index = result[0]
 
-    # Agotamiento por índice acumulado: si el índice alcanza el número de días
-    # disponibles, no hay más datos que solicitar (RF1.6). Se delega la regla a
-    # mlops_core.ingest y se finaliza sin error ni inserción de registros.
     if is_exhausted(batch_index, None, days=DAYS):
         logger.info("No more days available (batch_index=%s)", batch_index)
         context['ti'].xcom_push(key='data_exhausted', value=True)
@@ -109,16 +106,13 @@ def fetch_batch(**context):
             engine.dispose()
             return
 
-        # Cualquier otro error HTTP (4xx/5xx distinto del agotamiento) hace
-        # fallar la tarea preservando los metadatos ya registrados (RF1.7,
-        # RF12.1, RF12.3).
         response.raise_for_status()
         data = response.json()
         batch_number = data["batch_number"]
         records = data["data"]
         logger.info(f"Received batch {batch_number} with {len(records)} records")
 
-        # Persistencia de metadatos de ejecución en UTC (RF1.3).
+        # Persistencia de metadatos de ejecución en UTC.
         with engine.begin() as conn:
             conn.execute(text("""
                 INSERT INTO batch_control (batch_number, day_used, records_count, fetched_at, status)

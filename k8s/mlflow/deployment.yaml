@@ -15,8 +15,8 @@ spec:
     spec:
       containers:
         - name: mlflow
-          image: mlops-mlflow:latest
-          imagePullPolicy: Never
+          image: johnnycastaneda10/mlops-puj-mlflow:latest
+          imagePullPolicy: Always
           command:
             - mlflow
             - server

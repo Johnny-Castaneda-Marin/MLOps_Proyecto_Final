@@ -1,7 +1,7 @@
 import os
 
 DATA_API_URL = os.getenv("DATA_API_URL", "http://data-api-service")
-GROUP_NUMBER = 1
+GROUP_NUMBER = 5
 
 POSTGRES_RAW_CONN = os.getenv("POSTGRES_RAW_CONN", "postgresql://mlops_user:mlops1234@postgres-service:5432/raw_db")
 POSTGRES_CLEAN_CONN = os.getenv("POSTGRES_CLEAN_CONN", "postgresql://mlops_user:mlops1234@postgres-service:5432/clean_db")

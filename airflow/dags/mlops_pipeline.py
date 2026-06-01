@@ -17,7 +17,7 @@ from train import (
     promote_or_reject,
     skip_training,
     log_result,
-    train_and_promote,  # legacy: conservado para compatibilidad
+    train_and_promote,
 )
 
 default_args = {
@@ -31,7 +31,7 @@ with DAG(
     dag_id="mlops_pipeline",
     default_args=default_args,
     description="MLOps pipeline: ingest, validate, train, promote",
-    schedule_interval="@daily",
+    schedule_interval="*/5 * * * *",
     start_date=datetime(2026, 1, 1),
     catchup=False,
     tags=["mlops", "real_estate"],
