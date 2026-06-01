@@ -26,6 +26,10 @@ Plataforma MLOps de extremo a extremo para la predicción de precios de bienes r
 
 El sistema se despliega en Kubernetes y se sincroniza de forma declarativa con Argo CD. Las imágenes se construyen y publican en DockerHub mediante GitHub Actions. Cada componente vive en su propio namespace para aislamiento.
 
+<p align="center">
+  <img src="images/Principal.png" alt="Arquitectura MLOps Proyecto 2" width="1200"/>
+</p>
+
 ```mermaid
 flowchart LR
     Dev[Developer] --> GH[GitHub Repo]
@@ -553,39 +557,59 @@ Esta sección reúne las capturas de las pruebas realizadas sobre la plataforma.
 
 ### 14.1 Pipeline de Airflow
 
-<!-- ![DAG ejecutado exitosamente](images/evidencia_dag.png) -->
+<p align="center">
+  <img src="images/DAGS.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ### 14.2 Entrenamiento y registro en MLflow
 
-<!-- ![Experimentos y modelo champion en MLflow](images/evidencia_mlflow.png) -->
+<p align="center">
+  <img src="images/MLFlow.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ### 14.3 API de inferencia
 
-<!-- ![Predicción vía API](images/evidencia_api_predict.png) -->
-<!-- ![Recarga de modelo /admin/reload](images/evidencia_api_reload.png) -->
+<p align="center">
+  <img src="images/api.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ### 14.4 Interfaz Streamlit
 
-<!-- ![Inferencia desde Streamlit](images/evidencia_streamlit_pred.png) -->
-<!-- ![Historial de entrenamiento](images/evidencia_streamlit_historial.png) -->
+<p align="center">
+  <img src="images/streamlit.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ### 14.5 Observabilidad
 
-<!-- ![Prometheus scrapeando la API](images/evidencia_prometheus.png) -->
-<!-- ![Dashboard de Grafana](images/evidencia_grafana.png) -->
+<p align="center">
+  <img src="images/Prometheus.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
+
+<p align="center">
+  <img src="images/Grafana.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ### 14.6 Pruebas de carga
 
-<!-- ![Resultados de Locust](images/evidencia_locust.png) -->
+<p align="center">
+  <img src="images/locust_graph.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
+
+<p align="center">
+  <img src="images/locust_error.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ### 14.7 CI/CD y GitOps
 
-<!-- ![Pipeline de GitHub Actions](images/evidencia_ci.png) -->
-<!-- ![Argo CD sincronizado](images/evidencia_argocd.png) -->
+<p align="center">
+  <img src="images/Argo_cd.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ### 14.8 Pruebas automatizadas
 
-<!-- ![Suite de pruebas en verde](images/evidencia_pytest.png) -->
+<p align="center">
+  <img src="images/Actions.png" alt="Arquitectura MLOps" width="1200"/>
+</p>
 
 ---
 
