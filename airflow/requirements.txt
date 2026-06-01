@@ -1,4 +1,5 @@
 apache-airflow-providers-postgres
+apache-airflow-providers-amazon
 scikit-learn
 xgboost
 lightgbm

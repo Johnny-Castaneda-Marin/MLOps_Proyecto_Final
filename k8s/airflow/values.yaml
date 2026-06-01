@@ -36,6 +36,9 @@ env:
     value: "minioadmin"
   - name: AWS_SECRET_ACCESS_KEY
     value: "minioadmin123"
+  # Conexión S3 hacia MinIO para remote logging (RF: logs centralizados)
+  - name: AIRFLOW_CONN_MINIO_S3
+    value: "aws://minioadmin:minioadmin123@/?endpoint_url=http%3A%2F%2Fminio-service.mlops-storage.svc.cluster.local%3A9000"
 
 dags:
   gitSync:
@@ -78,12 +81,15 @@ webserver:
 apiServer:
   enabled: true
 
-# Logs en filesystem local del pod (sin PVC)
+# Remote logging a MinIO (S3) — evita served-logs HTTP y PVC
 config:
   core:
     colored_console_log: "False"
   logging:
-    remote_logging: "False"
+    remote_logging: "True"
+    remote_base_log_folder: "s3://mlflow/airflow-logs"
+    remote_log_conn_id: "minio_s3"
+    encrypt_s3_logs: "False"
   webserver:
     expose_config: "True"
 
