@@ -77,3 +77,17 @@ webserver:
 # Airflow 3.x usa api-server en lugar de webserver
 apiServer:
   enabled: true
+
+# Configurar logs para evitar el error de resolución DNS del scheduler
+config:
+  core:
+    colored_console_log: "False"
+  logging:
+    remote_logging: "False"
+  webserver:
+    expose_config: "True"
+
+# Habilitar el servicio headless del scheduler para resolución de logs
+scheduler:
+  logGroomerSidecar:
+    enabled: true
