@@ -1,8 +1,8 @@
 images:
   airflow:
-    repository: johnnycastaneda10/mlops-puj-airflow
-    tag: latest
-    pullPolicy: Always
+    repository: apache/airflow
+    tag: 3.0.1-python3.10
+    pullPolicy: IfNotPresent
 
 executor: LocalExecutor
 
@@ -74,6 +74,6 @@ webserver:
       cpu: "1000m"
       memory: "1Gi"
 
-# Deshabilitar el api-server (requiere Airflow 2.10+, nuestra imagen es 2.9.1)
+# Airflow 3.x usa api-server en lugar de webserver
 apiServer:
-  enabled: false
+  enabled: true
