@@ -127,11 +127,12 @@ La infraestructura (`k8s/`) está separada del código de cada componente, y la 
 
 ## 3. Componentes y Namespaces
 
-Cada aplicación se despliega en un namespace dedicado para aislamiento. La comunicación entre componentes usa FQDNs de Kubernetes (`service.namespace.svc.cluster.local`).
-
+Cada aplicación se despliega en un namespace dedicado. La comunicación usa FQDNs de Kubernetes (`service.namespace.svc.cluster.local`).
+ 
 | Componente | Namespace | Puerto | Propósito |
 |---|---|---|---|
 | PostgreSQL | `mlops-data` | 5432 | Bases `raw_db`, `clean_db`, `mlops_db`, `mlflow_db`, `airflow_db` |
+| Airflow | `mlops-data` | 8080 | Orquestador del pipeline |
 | MinIO | `mlops-storage` | 9000 / 9001 | Almacén de artefactos S3 (`s3://mlflow`) |
 | MLflow | `mlops-mlflow` | 5000 | Tracking + Model Registry |
 | Data API | `mlops-data-api` | 80 | Fuente externa de lotes diarios |
@@ -140,14 +141,14 @@ Cada aplicación se despliega en un namespace dedicado para aislamiento. La comu
 | Locust | `mlops-loadtest` | 8089 | Pruebas de carga |
 | Prometheus | `mlops-monitoring` | 9090 | Recolección de métricas |
 | Grafana | `mlops-monitoring` | 3000 | Dashboards de carga/latencia |
-| Argo CD | `argocd` | — | Sincronización declarativa (GitOps) |
+| Argo CD | `argocd` | 443 | Sincronización declarativa (GitOps) |
 
 <!-- Imagen: kubectl get pods -A mostrando los pods por namespace -->
 <!-- ![Pods por namespace](images/pods_namespaces.png) -->
 
 ---
 
-## 4. Capa de Lógica Pura `mlops_core`
+## 4. Capa Lógica `mlops_core`
 
 Toda la lógica de negocio vive en `mlops_core`, sin dependencias de infraestructura (PostgreSQL, MLflow, HTTP). Esto la hace determinista y testeable con pruebas basadas en propiedades.
 
@@ -444,40 +445,105 @@ pytest tests/ -v
 ## 13. Despliegue
 
 ### Prerrequisitos
-
-- Un clúster de Kubernetes (microk8s, kind, minikube o gestionado)
+ 
+- Clúster de Kubernetes (kind, minikube o gestionado)
 - Argo CD instalado en el clúster
-- DockerHub con las imágenes publicadas (vía GitHub Actions)
-
-### Despliegue con Argo CD (recomendado)
-
+- Docker Hub con las imágenes publicadas (vía GitHub Actions)
+- Token de GitHub con permiso `repo` (para gitSync de Airflow)
+### Paso 1 — Aplicar la Application de Argo CD
+ 
 ```bash
-# Aplicar la Application de Argo CD
 kubectl apply -f k8s/argocd/application.yaml
-
-# Argo CD sincroniza el resto de manifiestos automáticamente
 ```
-
-### Despliegue manual (alternativo)
-
+ 
+Argo CD sincroniza automáticamente todos los manifiestos de `k8s/` y crea los namespaces.
+ 
+### Paso 2 — Instalar Airflow con Helm
+ 
 ```bash
-# Crear los namespaces
-kubectl apply -f k8s/namespace/namespaces.yaml
-
-# Aplicar la infraestructura y las aplicaciones
-kubectl apply -f k8s/postgres/
-kubectl apply -f k8s/minio/
-kubectl apply -f k8s/mlflow/
-kubectl apply -f k8s/data-api/
-kubectl apply -f k8s/api/
-kubectl apply -f k8s/streamlit/
-kubectl apply -f k8s/prometheus/
-kubectl apply -f k8s/grafana/
-kubectl apply -f k8s/locust/
+helm repo add apache-airflow https://airflow.apache.org
+helm repo update
+ 
+helm install airflow apache-airflow/airflow \
+  --namespace mlops-data \
+  --values k8s/airflow/values.yaml \
+  --version 1.15.0 \
+  --timeout 10m
 ```
+ 
+### Paso 3 — Crear el secret de gitSync
+ 
+Reemplaza `TU_GITHUB_USERNAME` y `TU_GITHUB_TOKEN` con tus propias credenciales. El token se genera en `https://github.com/settings/tokens` con permiso `repo`.
+ 
+```bash
+kubectl create secret generic airflow-gitsync-secret \
+  --from-literal=GITSYNC_USERNAME=TU_GITHUB_USERNAME \
+  --from-literal=GITSYNC_PASSWORD=TU_GITHUB_TOKEN \
+  --from-literal=GIT_SYNC_USERNAME=TU_GITHUB_USERNAME \
+  --from-literal=GIT_SYNC_PASSWORD=TU_GITHUB_TOKEN \
+  -n mlops-data
+```
+ 
+### Paso 4 — Crear el bucket de MinIO
+ 
+```bash
+kubectl exec -it minio-0 -n mlops-storage -- \
+  mc alias set myminio http://localhost:9000 minioadmin minioadmin123
+kubectl exec -it minio-0 -n mlops-storage -- mc mb myminio/mlflow
+```
+ 
+### Paso 5 — Agregar credenciales AWS al secret de la API
+ 
+```bash
+kubectl patch secret api-secret -n mlops-api --type='json' -p='[
+  {"op": "add", "path": "/data/AWS_ACCESS_KEY_ID", "value": "'$(echo -n minioadmin | base64)'"},
+  {"op": "add", "path": "/data/AWS_SECRET_ACCESS_KEY", "value": "'$(echo -n minioadmin123 | base64)'"},
+  {"op": "add", "path": "/data/MLFLOW_S3_ENDPOINT_URL", "value": "'$(echo -n http://minio-service.mlops-storage.svc.cluster.local:9000 | base64)'"}
+]'
+kubectl rollout restart deployment/inference-api -n mlops-api
+```
+ 
+### Paso 6 — Verificar todos los pods
+ 
+```bash
+kubectl get pods -A | grep mlops
+```
+ 
+### Paso 7 — Port-forwards para acceder a los servicios
+ 
+```bash
+kubectl port-forward svc/airflow-webserver 8080:8080 -n mlops-data &
+kubectl port-forward svc/mlflow-service 5001:5000 -n mlops-mlflow &
+kubectl port-forward svc/inference-api-service 8001:8000 -n mlops-api &
+kubectl port-forward svc/streamlit-service 8501:8501 -n mlops-ui &
+kubectl port-forward svc/grafana-service 3000:3000 -n mlops-monitoring &
+kubectl port-forward svc/prometheus-service 9090:9090 -n mlops-monitoring &
+kubectl port-forward svc/locust-service 8089:8089 -n mlops-loadtest &
+kubectl port-forward svc/argocd-server 8443:443 -n argocd &
+```
+ 
+| Servicio | URL |
+|---|---|
+| Airflow | http://localhost:8080 (admin/admin) |
+| MLflow | http://localhost:5001 |
+| FastAPI docs | http://localhost:8001/docs |
+| Streamlit | http://localhost:8501 |
+| Grafana | http://localhost:3000 (admin/admin) |
+| Prometheus | http://localhost:9090 |
+| Locust | http://localhost:8089 |
+| Argo CD | https://localhost:8443 (admin) |
+ 
+### Paso 8 — Cargar el modelo champion en la API
+ 
+```bash
+curl -s -X POST http://localhost:8001/admin/reload \
+  -H "Authorization: Bearer changeme-admin-token"
+```
+ 
+### Paso 9 — Ejecutar el pipeline de Airflow
+ 
+En `http://localhost:8080` activa el DAG `mlops_pipeline` y dispáralo manualmente con ▶.
 
-<!-- Imagen: Recursos desplegados y en estado Running -->
-<!-- ![Despliegue](images/deploy_running.png) -->
 
 ---
 
