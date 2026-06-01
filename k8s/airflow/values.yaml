@@ -1,7 +1,7 @@
 images:
   airflow:
-    repository: apache/airflow
-    tag: 3.0.1-python3.10
+    repository: johnnycastaneda10/mlops-puj-airflow
+    tag: latest
     pullPolicy: IfNotPresent
 
 executor: LocalExecutor
