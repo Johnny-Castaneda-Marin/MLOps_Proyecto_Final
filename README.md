@@ -553,7 +553,7 @@ En `http://localhost:8080` activa el DAG `mlops_pipeline` y dispáralo manualmen
 
 ## 14. Evidencias
 
-Esta sección reúne las capturas de las pruebas realizadas sobre la plataforma. Coloca las imágenes en una carpeta `images/` y reemplaza los marcadores.
+Esta sección reúne las capturas de las pruebas realizadas sobre la plataforma.
 
 ### 14.1 Pipeline de Airflow
 
