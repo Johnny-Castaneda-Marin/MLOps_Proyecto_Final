@@ -1,11 +1,11 @@
-# Imagen de Airflow para la plataforma MLOps.
+# Imagen de Airflow 2.9 para la plataforma MLOps.
 #
 # IMPORTANTE: esta imagen se construye con el CONTEXTO en la RAÍZ del repo
 # (docker build -f airflow/Dockerfile .), porque necesita incluir el módulo de
 # lógica pura `mlops_core`, que vive en la raíz y es compartido con la API.
 # El workflow de CI usa `context: .` para este Dockerfile.
 
-FROM apache/airflow:3.0.1-python3.10
+FROM apache/airflow:2.9.3-python3.10
 
 # --- Dependencias del sistema (compilación de psycopg2, etc.) ----------------
 USER root

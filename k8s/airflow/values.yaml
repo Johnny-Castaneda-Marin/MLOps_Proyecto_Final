@@ -64,8 +64,6 @@ webserver:
     limits:
       cpu: "500m"
       memory: "512Mi"
-apiServer:
-  enabled: true
 config:
   core:
     colored_console_log: "False"
@@ -74,6 +72,8 @@ config:
     logging_level: "INFO"
   webserver:
     expose_config: "True"
+  api:
+    auth_backends: "airflow.api.auth.backend.basic_auth"
 webserverSecretKey: mlops-airflow-secret-key
 migrateDatabaseJob:
   enabled: true
