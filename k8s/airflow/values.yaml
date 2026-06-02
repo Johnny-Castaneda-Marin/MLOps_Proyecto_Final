@@ -47,11 +47,11 @@ resources:
 scheduler:
   resources:
     requests:
-      cpu: "250m"
-      memory: "256Mi"
+      cpu: "500m"
+      memory: "512Mi"
     limits:
-      cpu: "2000m"
-      memory: "1Gi"
+      cpu: "4000m"
+      memory: "4Gi"
 webserver:
   resources:
     requests:
@@ -69,7 +69,10 @@ config:
     remote_logging: "False"
   webserver:
     expose_config: "True"
+  celery:
+    worker_log_server_port: "8793"
+  scheduler:
+    fetch_logs_from_worker: "False"
 logs:
   persistence:
     enabled: true
-    existingClaim: airflow-logs
