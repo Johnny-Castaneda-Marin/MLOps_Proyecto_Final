@@ -13,6 +13,8 @@ postgresql:
 env:
   - name: AIRFLOW__CORE__LOAD_EXAMPLES
     value: "false"
+  - name: AIRFLOW__CORE__HOSTNAME_CALLABLE
+    value: "airflow.utils.net.getfqdn"
   - name: DATA_API_URL
     value: "http://data-api-service.mlops-data-api.svc.cluster.local"
   - name: POSTGRES_RAW_CONN
@@ -52,6 +54,8 @@ scheduler:
     limits:
       cpu: "2000m"
       memory: "2Gi"
+  logGroomerSidecar:
+    enabled: true
 webserver:
   resources:
     requests:
@@ -70,6 +74,19 @@ config:
     logging_level: "INFO"
   webserver:
     expose_config: "True"
+webserverSecretKey: mlops-airflow-secret-key
+migrateDatabaseJob:
+  enabled: true
+createUserJob:
+  enabled: true
+defaultUser:
+  enabled: true
+  username: admin
+  password: admin
+  firstname: Admin
+  lastname: User
+  email: admin@example.com
+  role: Admin
 logs:
   persistence:
     enabled: false
