@@ -72,4 +72,6 @@ config:
     expose_config: "True"
 logs:
   persistence:
-    enabled: false
+    enabled: true
+    size: 2Gi
+    storageClassName: standard
