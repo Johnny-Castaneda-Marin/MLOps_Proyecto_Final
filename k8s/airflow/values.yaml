@@ -67,12 +67,9 @@ config:
     colored_console_log: "False"
   logging:
     remote_logging: "False"
+    logging_level: "INFO"
   webserver:
     expose_config: "True"
-  celery:
-    worker_log_server_port: "8793"
-  scheduler:
-    fetch_logs_from_worker: "False"
 logs:
   persistence:
-    enabled: true
+    enabled: false
