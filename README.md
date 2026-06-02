@@ -165,6 +165,9 @@ Las tareas de Airflow y la API importan estas funciones y solo se encargan de le
 ## 5. Pipeline de Airflow
 
 El DAG `mlops_pipeline` orquesta el flujo completo desde la ingesta hasta la promoción.
+<p align="center">
+  <img src="images/airflow_flow.png" alt="Flow en Airflow" width="1200"/>
+</p>
 
 ```mermaid
 flowchart TD
