@@ -13,6 +13,6 @@ MLFLOW_MODEL_NAME = "real_estate_champion"
 DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
 
 MIN_RECORDS_TO_TRAIN = 1000
-MIN_VOLUME_INCREASE_PCT = 0.05
+MIN_VOLUME_INCREASE_PCT = 0.10
 DRIFT_THRESHOLD = 0.1
 PROMOTION_MAE_IMPROVEMENT_PCT = 0.03

@@ -37,6 +37,7 @@ class DecisionInputs:
     drift_detected: bool
     quality_valid: bool
     new_categories_count: int = 0
+    new_columns_count: int = 0
 
 
 @dataclass(frozen=True)

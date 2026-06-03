@@ -75,6 +75,7 @@ def validate_schema(**context):
         logger.info("Schema validation passed")
         ti.xcom_push(key='schema_valid', value=True)
         ti.xcom_push(key='schema_issues', value="none")
+        ti.xcom_push(key='new_columns_count', value=0)
         return
 
     issues = []
@@ -88,6 +89,7 @@ def validate_schema(**context):
     logger.warning(f"Schema issues: {issues_str}")
     ti.xcom_push(key='schema_valid', value=False)
     ti.xcom_push(key='schema_issues', value=issues_str)
+    ti.xcom_push(key='new_columns_count', value=len(result.extra_columns) if result.extra_columns else 0)
 
 
 def validate_quality(**context):
@@ -225,6 +227,7 @@ def decide_training(**context):
     drift = ti.xcom_pull(key='drift_detected', task_ids='detect_drift') or False
     quality_valid = ti.xcom_pull(key='quality_valid', task_ids='validate_quality')
     new_categories_count = ti.xcom_pull(key='new_categories', task_ids='detect_drift') or 0
+    new_columns_count = ti.xcom_pull(key='new_columns_count', task_ids='validate_schema') or 0
 
     # Conteo acumulado de registros en bruto (mantiene el comportamiento actual).
     engine = create_engine(POSTGRES_RAW_CONN)
@@ -243,11 +246,14 @@ def decide_training(**context):
         drift_detected=bool(drift),
         quality_valid=bool(quality_valid),
         new_categories_count=int(new_categories_count or 0),
+        new_columns_count=int(new_columns_count or 0),
     )
     decision = core_decide_training(
         inputs,
         min_records=MIN_RECORDS_TO_TRAIN,
         min_volume_pct=MIN_VOLUME_INCREASE_PCT,
+        min_new_categories=5,
+        min_new_columns=2,
     )
 
     # Propaga el motivo fielmente (incluye, cuando aplica, la adaptación de

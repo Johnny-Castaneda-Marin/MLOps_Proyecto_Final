@@ -260,8 +260,9 @@ else:
 
     st.subheader("Detalle por Lote")
 
-    for _, row in df_history.iterrows():
-        batch_num = row["batch_number"]
+    total = len(df_history)
+    for idx, (_, row) in enumerate(df_history.iterrows()):
+        batch_num = total - idx
         trained = row["trained"]
         train_reason = row["train_reason"] or "—"
         promoted = row["promoted"]
