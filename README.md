@@ -755,7 +755,10 @@ postgresql:
     repository: bitnamilegacy/postgresql
     tag: 16.1.0-debian-11-r15
 ```
+---
+## 🎥 Video de Sustentación
 
+[▶️ Ver video en YouTube](https://youtu.be/8mMgNy_dN4o)
 ---
 
 ## 15. Colaboradores
