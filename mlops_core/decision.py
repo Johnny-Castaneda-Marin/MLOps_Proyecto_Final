@@ -41,23 +41,25 @@ def decide_training(
     Returns:
         Una ``Decision`` con el tipo (TRAIN/SKIP) y un motivo legible.
     """
-    # Regla 1: señales técnicas que gatillan reentrenamiento.
+    # Regla 1: el volumen de datos nuevos debe ser >= 10% del total.
+    # Si no se cumple, SKIP sin importar las otras condiciones.
+    volume_pct = (
+        inp.inserted_records / inp.total_records if inp.total_records > 0 else 0.0
+    )
+    if volume_pct < min_volume_pct:
+        return Decision(
+            decision=DecisionType.SKIP,
+            reason=(
+                f"Volumen de datos nuevos insuficiente: "
+                f"proporción nueva={volume_pct:.4f} < min_volume_pct={min_volume_pct}."
+            ),
+        )
+
+    # Regla 2: con volumen suficiente, entrenar si alguna señal técnica se cumple.
     if inp.drift_detected:
         return Decision(
             decision=DecisionType.TRAIN,
             reason="Drift detectado en las variables numéricas del lote.",
-        )
-
-    volume_pct = (
-        inp.inserted_records / inp.total_records if inp.total_records > 0 else 0.0
-    )
-    if volume_pct >= min_volume_pct:
-        return Decision(
-            decision=DecisionType.TRAIN,
-            reason=(
-                f"Incremento de volumen suficiente: "
-                f"proporción nueva={volume_pct:.4f} >= min_volume_pct={min_volume_pct}."
-            ),
         )
 
     if inp.new_categories_count >= min_new_categories:
@@ -80,13 +82,11 @@ def decide_training(
             ),
         )
 
-    # Ninguna señal técnica se cumple → SKIP.
+    # Volumen suficiente pero sin otras señales → entrenar por volumen.
     return Decision(
-        decision=DecisionType.SKIP,
+        decision=DecisionType.TRAIN,
         reason=(
-            "Sin señales técnicas para reentrenar: sin drift, "
-            f"proporción de volumen nuevo={volume_pct:.4f} < {min_volume_pct}, "
-            f"categorías nuevas={inp.new_categories_count} < {min_new_categories}, "
-            f"columnas nuevas={inp.new_columns_count} < {min_new_columns}."
+            f"Incremento de volumen suficiente: "
+            f"proporción nueva={volume_pct:.4f} >= min_volume_pct={min_volume_pct}."
         ),
     )
