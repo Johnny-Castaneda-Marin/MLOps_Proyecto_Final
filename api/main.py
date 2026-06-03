@@ -9,7 +9,7 @@ Endpoints:
 El modelo se sirve a través del ``ModelHolder`` thread-safe (task 9.1). La
 recarga se realiza consultando MLflow por el alias ``champion``. Cada solicitud
 de inferencia se registra como evento en ``inference_log`` (task 9.4).
-"""
+""" 
 
 from __future__ import annotations
 
