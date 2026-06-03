@@ -19,7 +19,8 @@ Plataforma MLOps de extremo a extremo para la predicción de precios de bienes r
 - 12 🧪 [Pruebas Basadas en Propiedades](#12-pruebas-basadas-en-propiedades)
 - 13 📦 [Despliegue](#13-despliegue)
 - 14 📸 [Evidencias](#14-evidencias)
-- 15 👥 [Colaboradores](#15-colaboradores)
+- 15 🔧 [Troubleshooting](#16-troubleshooting)
+- 16 👥 [Colaboradores](#15-colaboradores)
 ---
 
 ## 1. Arquitectura
@@ -607,6 +608,153 @@ Esta sección reúne las capturas de las pruebas realizadas sobre la plataforma.
 <p align="center">
   <img src="images/Actions.png" alt="Arquitectura MLOps" width="1200"/>
 </p>
+
+---
+
+## 16. Troubleshooting
+
+### 16.1 Incompatibilidad de versiones MLflow (cliente vs servidor)
+
+**Síntoma:** `train_candidates` falla con `MlflowException: API request to endpoint /api/2.0/mlflow/logged-models failed with error code 404`.
+
+**Causa:** El cliente MLflow instalado en la imagen de Airflow era versión 3.x mientras el servidor MLflow era 2.13.0. El endpoint `/api/2.0/mlflow/logged-models` no existe en MLflow 2.x.
+
+**Solución:** Alinear ambas versiones. El servidor (`mlflow/Dockerfile`) y el cliente (`airflow/requirements.txt`) deben usar la misma versión mayor. En la versión actual ambos usan MLflow 2.17.2.
+
+---
+
+### 16.2 Bucket de MinIO no existe (`NoSuchBucket`)
+
+**Síntoma:** `train_candidates` falla con `S3UploadFailedError: An error occurred (NoSuchBucket) when calling the PutObject operation`.
+
+**Causa:** El Job `minio-create-bucket` corrió antes de que MinIO estuviera listo, o MinIO perdió su PVC durante un reset del clúster.
+
+**Solución:**
+```bash
+# Verificar que el bucket existe
+kubectl exec -n mlops-storage minio-0 -- mc alias set local http://localhost:9000 minioadmin minioadmin123
+kubectl exec -n mlops-storage minio-0 -- mc ls local/
+
+# Si no existe, crearlo manualmente
+kubectl exec -n mlops-storage minio-0 -- mc mb local/mlflow --ignore-existing
+```
+
+---
+
+### 16.3 Pods de Airflow en `Pending` (PVC no se puede montar)
+
+**Síntoma:** Pods del scheduler, api-server o triggerer quedan en `Pending` con evento `FailedScheduling: running PreBind plugin "VolumeBinding"`.
+
+**Causa:** El PVC de logs usa `ReadWriteMany` que Kind (local-path provisioner) no soporta, o hay un PVC colgado de una instalación anterior.
+
+**Solución:** Usar un PVC con `ReadWriteOnce` (funciona en Kind con un solo nodo) y crearlo antes de instalar Helm:
+```bash
+kubectl delete pvc airflow-logs-pvc -n mlops-data --ignore-not-found
+kubectl apply -f k8s/airflow/logs-pvc.yaml
+helm install airflow apache-airflow/airflow --namespace mlops-data --values k8s/airflow/values.yaml --timeout 20m
+```
+
+---
+
+### 16.4 Scheduler en `CrashLoopBackOff` con tasks huérfanos
+
+**Síntoma:** El scheduler arranca, encuentra tasks huérfanos de runs anteriores, los ejecuta inmediatamente, falla y se reinicia en bucle.
+
+**Causa:** Tasks atascados de ejecuciones previas que nunca completaron. Al reiniciar, el scheduler intenta re-ejecutarlos y crashea (OOM o error de conexión).
+
+**Solución:** Reset nuclear de Airflow:
+```bash
+helm uninstall airflow --namespace mlops-data
+kubectl delete pvc -n mlops-data -l app.kubernetes.io/instance=airflow
+kubectl delete pvc airflow-logs-pvc -n mlops-data --ignore-not-found
+kubectl apply -f k8s/airflow/logs-pvc.yaml
+helm install airflow apache-airflow/airflow --namespace mlops-data --values k8s/airflow/values.yaml --timeout 20m
+```
+
+---
+
+### 16.5 Conflicto entre ArgoCD y Helm por recursos de Airflow
+
+**Síntoma:** Al reinstalar Airflow con Helm, el PVC `airflow-logs` genera errores de ownership metadata (`missing key "app.kubernetes.io/managed-by"`).
+
+**Causa:** ArgoCD sincronizaba los archivos de `k8s/airflow/` (incluyendo el PVC de logs), creando recursos que Helm luego no podía reclamar como suyos.
+
+**Solución:** Excluir el directorio `airflow/` del sync de ArgoCD en `k8s/argocd/application.yaml`:
+```yaml
+directory:
+  recurse: true
+  exclude: '{airflow/**}'
+```
+Así Helm gestiona Airflow de forma independiente y ArgoCD gestiona el resto de la infraestructura.
+
+---
+
+### 16.6 API de inferencia sin modelo cargado (`model_loaded: False`)
+
+**Síntoma:** `/health` devuelve `{"status": "degraded", "model_loaded": false}`. Streamlit muestra "El servicio de inferencia no tiene un modelo cargado".
+
+**Causa:** La API solo cargaba el modelo al arrancar. Si el champion no existía en ese momento (porque Airflow aún no había entrenado), quedaba sin modelo permanentemente. Con 2 réplicas, podían quedar en estados distintos.
+
+**Solución:** Se agregó un background task de recarga periódica en `api/main.py`:
+- Sin modelo → reintenta cada 10 segundos
+- Con modelo → verifica nueva versión cada 60 segundos
+
+Si se necesita carga inmediata:
+```bash
+kubectl rollout restart deployment inference-api -n mlops-api
+```
+
+---
+
+### 16.7 `imagePullPolicy: IfNotPresent` no actualiza imágenes `latest`
+
+**Síntoma:** Después de un push de nueva imagen, los pods siguen usando la versión anterior cacheada.
+
+**Causa:** Con `IfNotPresent`, Kubernetes no descarga la imagen si ya tiene una con ese tag en el nodo.
+
+**Solución:** Cambiar a `imagePullPolicy: Always` en todos los deployments que usan tag `latest` (api, streamlit, mlflow, locust, airflow).
+
+---
+
+### 16.8 Helm upgrade falla en StatefulSets al cambiar volumeClaimTemplates
+
+**Síntoma:** `Error: UPGRADE FAILED: cannot patch "airflow-scheduler" with kind StatefulSet: spec: Forbidden: updates to statefulset spec for fields other than 'replicas', 'template'...`
+
+**Causa:** Kubernetes no permite modificar `volumeClaimTemplates` de un StatefulSet existente vía upgrade.
+
+**Solución:** Desinstalar y reinstalar:
+```bash
+helm uninstall airflow --namespace mlops-data
+kubectl delete pvc -n mlops-data -l app.kubernetes.io/instance=airflow
+helm install airflow apache-airflow/airflow --namespace mlops-data --values k8s/airflow/values.yaml --timeout 20m
+```
+
+---
+
+### 16.9 Logs de Airflow no visibles en la UI ("No host supplied")
+
+**Síntoma:** La UI de Airflow muestra `Could not read served logs: Invalid URL 'http://:8793/log/...': No host supplied`.
+
+**Causa:** Bug conocido en Airflow 3.x con LocalExecutor ([Issue #42136](https://github.com/apache/airflow/issues/42136)). El Task SDK de Airflow 3 no registra el hostname del worker en la base de datos al completar tasks.
+
+**Solución adoptada:** Se usa Airflow 2.9.3 donde este bug no existe. El webserver y el scheduler comparten el PVC de logs (`airflow-logs-pvc` con `ReadWriteOnce`) y el webserver lee los logs directamente del filesystem.
+
+---
+
+### 16.10 Imagen de PostgreSQL de Bitnami no disponible
+
+**Síntoma:** El pod `airflow-postgresql-0` falla con `ImagePullBackOff` porque la imagen `bitnami/postgresql:16.1.0-debian-11-r15` ya no existe en Docker Hub.
+
+**Causa:** Bitnami movió sus imágenes al repositorio `bitnamilegacy` en agosto 2025.
+
+**Solución:** En `values.yaml` se apunta al repositorio legacy:
+```yaml
+postgresql:
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+    tag: 16.1.0-debian-11-r15
+```
 
 ---
 
