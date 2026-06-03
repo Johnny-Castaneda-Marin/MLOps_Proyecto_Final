@@ -1,3 +1,7 @@
+# Versión de Airflow que corre la imagen custom. El chart usa este valor para
+# decidir qué componentes/comandos arrancar (en 2.x => webserver, no api-server).
+airflowVersion: "2.9.3"
+defaultAirflowTag: "2.9.3"
 images:
   airflow:
     repository: johnnycastaneda10/mlops-puj-airflow
@@ -6,6 +10,15 @@ images:
 executor: LocalExecutor
 postgresql:
   enabled: true
+  # Bitnami movió sus imágenes versionadas a docker.io/bitnamilegacy el
+  # 28-ago-2025 y borró el catálogo público, dejando rota la etiqueta por
+  # defecto del chart (bitnami/postgresql:16.1.0-debian-11-r15 -> manifest
+  # unknown). Apuntamos al repositorio legacy de solo lectura, que conserva
+  # esa misma etiqueta, para poder descargar la imagen.
+  image:
+    registry: docker.io
+    repository: bitnamilegacy/postgresql
+    tag: 16.1.0-debian-11-r15
   auth:
     username: airflow
     password: airflow
@@ -14,7 +27,7 @@ env:
   - name: AIRFLOW__CORE__LOAD_EXAMPLES
     value: "false"
   - name: AIRFLOW__CORE__HOSTNAME_CALLABLE
-    value: "airflow.utils.net.getfqdn"
+    value: "airflow.utils.net.get_host_ip_address"
   - name: DATA_API_URL
     value: "http://data-api-service.mlops-data-api.svc.cluster.local"
   - name: POSTGRES_RAW_CONN
@@ -59,11 +72,25 @@ scheduler:
 webserver:
   resources:
     requests:
-      cpu: "100m"
-      memory: "256Mi"
-    limits:
-      cpu: "500m"
+      cpu: "300m"
       memory: "512Mi"
+    limits:
+      cpu: "1000m"
+      memory: "1Gi"
+  startupProbe:
+    timeoutSeconds: 60
+    failureThreshold: 30
+    periodSeconds: 10
+  livenessProbe:
+    initialDelaySeconds: 60
+    timeoutSeconds: 60
+    failureThreshold: 10
+    periodSeconds: 10
+  readinessProbe:
+    initialDelaySeconds: 60
+    timeoutSeconds: 60
+    failureThreshold: 10
+    periodSeconds: 10
 config:
   core:
     colored_console_log: "False"
@@ -77,14 +104,18 @@ config:
 webserverSecretKey: mlops-airflow-secret-key
 migrateDatabaseJob:
   enabled: true
+# Job que crea el usuario inicial. En el chart 1.x se controla con useHelmHooks,
+# no con 'enabled' (esa propiedad no existe en el schema y rompe la validación).
 createUserJob:
-  enabled: true
+  useHelmHooks: true
+# Usuario admin por defecto. Es una clave de NIVEL RAÍZ en el chart oficial
+# (no va anidada bajo webserver). Campos en camelCase: firstName / lastName.
 defaultUser:
   enabled: true
   username: admin
   password: admin
-  firstname: Admin
-  lastname: User
+  firstName: Admin
+  lastName: User
   email: admin@example.com
   role: Admin
 logs:
