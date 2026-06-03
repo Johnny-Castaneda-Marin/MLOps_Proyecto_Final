@@ -13,6 +13,7 @@ de inferencia se registra como evento en ``inference_log`` (task 9.4).
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 from contextlib import asynccontextmanager
@@ -37,6 +38,7 @@ from api.config import (
     MLFLOW_CHAMPION_ALIAS,
     MLFLOW_MODEL_NAME,
     MLFLOW_TRACKING_URI,
+    RELOAD_INTERVAL_SECONDS,
 )
 from api.inference_log import ensure_table, log_inference_async
 from api.model_holder import ModelHolder, ModelNotInitializedError
@@ -208,7 +210,36 @@ async def lifespan(app: FastAPI):
             "La API arrancará sin modelo cargado.",
             exc,
         )
+
+    # Background task: recarga periódica del modelo champion
+    async def _periodic_reload():
+        """Intenta recargar el modelo cada RELOAD_INTERVAL_SECONDS.
+
+        Si no hay modelo cargado, reintenta cada 10s para recuperarse rápido.
+        Si ya hay modelo, verifica si hay nueva versión cada RELOAD_INTERVAL_SECONDS.
+        """
+        while True:
+            interval = 10 if not model_holder.is_initialized else RELOAD_INTERVAL_SECONDS
+            await asyncio.sleep(interval)
+            try:
+                current_version = model_holder.version
+                new_version = load_champion_model(model_holder)
+                if new_version != current_version:
+                    MODEL_INFO.labels(version=new_version, model_name=MLFLOW_MODEL_NAME).set(1)
+                    logger.info("Modelo recargado: v%s -> v%s", current_version, new_version)
+            except Exception as exc:
+                logger.debug("Recarga periódica falló (se reintentará): %s", exc)
+
+    reload_task = asyncio.create_task(_periodic_reload())
+
     yield
+
+    # Cleanup al apagar
+    reload_task.cancel()
+    try:
+        await reload_task
+    except asyncio.CancelledError:
+        pass
 
 
 app = FastAPI(

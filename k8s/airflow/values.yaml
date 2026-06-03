@@ -120,4 +120,5 @@ defaultUser:
   role: Admin
 logs:
   persistence:
-    enabled: false
+    enabled: true
+    existingClaim: airflow-logs-pvc
